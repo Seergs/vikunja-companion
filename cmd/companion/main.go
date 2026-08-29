@@ -4,12 +4,18 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
+	"time"
 
+	"github.com/seergs/vikunja-companion/internal/companion"
 	"github.com/seergs/vikunja-companion/internal/config"
 	"github.com/seergs/vikunja-companion/internal/httpx"
+	"github.com/seergs/vikunja-companion/internal/proxy"
+	"github.com/seergs/vikunja-companion/internal/store"
+	"github.com/seergs/vikunja-companion/internal/vikunja"
 )
 
 // Version is injected at build time via -ldflags "-X main.Version=...".
@@ -39,13 +45,51 @@ func run() error {
 		"byo_apns", cfg.APNS != nil,
 	)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("ok\n"))
-	})
-	// TODO(fase-1): mount internal/proxy for everything not under /companion/,
-	// and the /companion/v1/* routes (info, devices, settings, webhooks/vikunja).
+	db, err := store.Open(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	log.Info("database ready", "path", cfg.DBPath)
 
-	return httpx.Serve(cfg.ListenAddr, mux, log)
+	vk := vikunja.NewClient(cfg.UpstreamURL, nil)
+
+	// Refuse to start unless the upstream is a reachable Vikunja instance (§8).
+	upstreamVersion, err := probeUpstream(vk)
+	if err != nil {
+		return fmt.Errorf("upstream check failed for %s: %w", cfg.UpstreamURL, err)
+	}
+	log.Info("upstream reachable", "url", cfg.UpstreamURL, "vikunja_version", upstreamVersion)
+
+	rp, err := proxy.New(cfg.UpstreamURL, log)
+	if err != nil {
+		return err
+	}
+
+	handler := companion.NewRouter(companion.Options{
+		Version:       Version,
+		VikunjaURL:    cfg.UpstreamURL,
+		VikunjaClient: vk,
+		Proxy:         rp,
+		Logger:        log,
+		SeedVersion:   upstreamVersion,
+	})
+
+	return httpx.Serve(cfg.ListenAddr, handler, log)
+}
+
+// probeUpstream confirms VIKUNJA_UPSTREAM_URL answers GET /api/v1/info with a
+// version, returning it.
+func probeUpstream(vk *vikunja.Client) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	info, err := vk.Info(ctx)
+	if err != nil {
+		return "", err
+	}
+	if info.Version == "" {
+		return "", fmt.Errorf("/api/v1/info returned no version — not a Vikunja instance?")
+	}
+	return info.Version, nil
 }
