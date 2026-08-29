@@ -16,7 +16,7 @@ type infoFetcher interface {
 	Info(ctx context.Context) (*vikunja.Info, error)
 }
 
-// infoResponse is the body of GET /companion/v1/info (docs/COMPANION.md §5).
+// infoResponse is the body of GET /companion/v1/info.
 type infoResponse struct {
 	Companion struct {
 		Version string `json:"version"`

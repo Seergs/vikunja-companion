@@ -1,6 +1,5 @@
 // Package vikunja is the thin HTTP client for Vikunja's public API. All
-// Vikunja-version coupling lives here — no schema access, no fork
-// (docs/COMPANION.md §1, §3, §6.3).
+// Vikunja-version coupling lives here — no schema access, no fork.
 //
 // Fase 1 surface: GET /api/v1/info, GET /api/v1/user (caller identity).
 // Fase 2 surface: GET/PUT/POST/DELETE /api/v1/user/settings/webhooks,
@@ -57,10 +56,8 @@ func IsUnauthorized(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusUnauthorized
 }
 
-// Info is the subset of GET /api/v1/info the companion needs.
-//
-// NOTE (docs/COMPANION.md §11): the full /api/v1/info shape is not verified
-// against a live instance; only `version` is relied on here.
+// Info is the subset of GET /api/v1/info the companion needs. The full response
+// shape is not verified against a live instance; only `version` is relied on.
 type Info struct {
 	Version string `json:"version"`
 }
@@ -74,10 +71,8 @@ func (c *Client) Info(ctx context.Context) (*Info, error) {
 	return &info, nil
 }
 
-// User is the subset of GET /api/v1/user identifying the caller (§3).
-//
-// NOTE (docs/COMPANION.md §11): only `id` is relied on; `username` is kept for
-// logging.
+// User is the subset of GET /api/v1/user identifying the caller. Only `id` is
+// relied on; `username` is kept for logging.
 type User struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`

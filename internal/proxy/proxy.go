@@ -1,5 +1,5 @@
 // Package proxy is the transparent reverse proxy to the upstream Vikunja
-// instance (docs/COMPANION.md §4).
+// instance.
 //
 // Everything not under /companion/ is proxied verbatim: method, path, query,
 // headers, body, status, and streaming responses. The only rewriting is

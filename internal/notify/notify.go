@@ -1,5 +1,5 @@
 // Package notify is the reusable delivery seam: notification -> dedupe -> seal
-// -> relay push (docs/COMPANION.md §6.4, §9).
+// -> relay push.
 //
 // It must not import internal/vikunja or learn anything Vikunja-specific. The
 // event -> notification mapping lives in a Source (v1: internal/webhook);

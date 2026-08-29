@@ -1,5 +1,4 @@
-// Package store is the SQLite persistence layer for both binaries
-// (docs/COMPANION.md §7).
+// Package store is the SQLite persistence layer for both binaries.
 //
 // Driver is modernc.org/sqlite (pure Go) so the container stays a distroless
 // static binary — do not switch to mattn/go-sqlite3. The connection pool is

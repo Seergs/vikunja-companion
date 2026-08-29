@@ -1,8 +1,8 @@
--- Companion schema v1 (docs/COMPANION.md §3, §6, §7).
+-- Companion schema v1.
 
 -- One row per Vikunja user the companion acts for. The Vikunja API token is
--- stored encrypted with COMPANION_MASTER_KEY (§3, §8); deleting a user's last
--- device deletes this row and the webhook registration.
+-- stored encrypted with COMPANION_MASTER_KEY; deleting a user's last device
+-- deletes this row and the webhook registration.
 CREATE TABLE users (
     user_id    INTEGER PRIMARY KEY,          -- Vikunja user id
     token_enc  BLOB NOT NULL,                -- AEAD-encrypted Vikunja API token
@@ -10,8 +10,8 @@ CREATE TABLE users (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- One row per registered iOS device (§6.4). public_key is the device's X25519
--- public key; notifications are sealed to it before leaving the companion.
+-- One row per registered iOS device. public_key is the device's X25519 public
+-- key; notifications are sealed to it before leaving the companion.
 CREATE TABLE devices (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -25,8 +25,8 @@ CREATE TABLE devices (
 
 CREATE INDEX idx_devices_user ON devices(user_id);
 
--- One user-level Vikunja webhook registration per user (§6.3). secret is the
--- HMAC key; events is a comma-separated subset of the three v1 events.
+-- One user-level Vikunja webhook registration per user. secret is the HMAC key;
+-- events is a comma-separated subset of the three v1 events.
 CREATE TABLE webhooks (
     user_id    INTEGER PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
     vikunja_id INTEGER NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE webhooks (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Delivery dedupe by event fingerprint (§6.4).
+-- Delivery dedupe by event fingerprint.
 CREATE TABLE notifications_sent (
     dedupe_key TEXT PRIMARY KEY,
     sent_at    TEXT NOT NULL DEFAULT (datetime('now'))

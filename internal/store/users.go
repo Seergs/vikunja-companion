@@ -11,7 +11,7 @@ import (
 var ErrNotFound = errors.New("store: not found")
 
 // UpsertUserToken stores (or replaces) the encrypted Vikunja API token for a
-// user. tokenEnc is ciphertext — encryption is the caller's responsibility (§8).
+// user. tokenEnc is ciphertext — encryption is the caller's responsibility.
 func (db *DB) UpsertUserToken(ctx context.Context, userID int64, tokenEnc []byte) error {
 	_, err := db.sql.ExecContext(ctx, `
 		INSERT INTO users (user_id, token_enc) VALUES (?, ?)
@@ -41,7 +41,7 @@ func (db *DB) UserToken(ctx context.Context, userID int64) ([]byte, error) {
 }
 
 // DeleteUser removes a user and, via ON DELETE CASCADE, their devices and
-// webhook registration (§8).
+// webhook registration.
 func (db *DB) DeleteUser(ctx context.Context, userID int64) error {
 	if _, err := db.sql.ExecContext(ctx, `DELETE FROM users WHERE user_id = ?`, userID); err != nil {
 		return fmt.Errorf("store: delete user %d: %w", userID, err)

@@ -1,6 +1,5 @@
 // Command companion is the self-hosted transparent reverse proxy to a Vikunja
-// instance that also serves its own features under /companion/v1/*
-// (docs/COMPANION.md §1–§6).
+// instance that also serves its own features under /companion/v1/*.
 package main
 
 import (
@@ -54,7 +53,7 @@ func run() error {
 
 	vk := vikunja.NewClient(cfg.UpstreamURL, nil)
 
-	// Refuse to start unless the upstream is a reachable Vikunja instance (§8).
+	// Refuse to start unless the upstream is a reachable Vikunja instance.
 	upstreamVersion, err := probeUpstream(vk)
 	if err != nil {
 		return fmt.Errorf("upstream check failed for %s: %w", cfg.UpstreamURL, err)

@@ -6,10 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Fase 1 — the spine works.** `cmd/companion` boots, opens SQLite and runs
 embedded migrations (`internal/store`), refuses to start unless
-`VIKUNJA_UPSTREAM_URL` answers `GET /api/v1/info` with a version (§8), then
-serves:
+`VIKUNJA_UPSTREAM_URL` answers `GET /api/v1/info` with a version, then serves:
 
-- `GET /companion/v1/info` — the §5 capability probe (`features: ["push"]`,
+- `GET /companion/v1/info` — the capability probe (`features: ["push"]`,
   upstream version cached ~1 min).
 - everything else → `internal/proxy`, a verbatim reverse proxy to Vikunja
   (`SetURL` + `SetXForwarded`, `FlushInterval: -1` for streaming, 502 on
@@ -17,8 +16,8 @@ serves:
 
 `internal/vikunja` covers `GET /api/v1/info` and `GET /api/v1/user`.
 `internal/companion` holds the router + the `sha256(token) → user` identity
-cache (§3) — the cache is built and tested but not yet consumed by a route
-(devices/settings routes are Fase 2). All of the above is tested.
+cache — built and tested but not yet consumed by a route (devices/settings
+routes are Fase 2). All of the above is tested.
 
 Still doc-comment-only stubs: `internal/webhook`, `internal/notify`,
 `internal/crypto`, `internal/relay`.

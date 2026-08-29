@@ -1,6 +1,6 @@
 // Command relay is the content-blind APNs forwarder, operated once by the
 // project maintainer. It holds the Apple .p8 key and sees only an opaque device
-// token plus ciphertext (docs/COMPANION.md §6.6).
+// token plus ciphertext.
 package main
 
 import (

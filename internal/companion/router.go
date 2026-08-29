@@ -13,7 +13,7 @@ const (
 	defaultInfoTTL     = 1 * time.Minute
 )
 
-// v1Features is the capability list advertised by /companion/v1/info (§5).
+// v1Features is the capability list advertised by /companion/v1/info.
 var v1Features = []string{"push"}
 
 // Options configures NewRouter.
@@ -55,7 +55,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 
 	// Routes under /companion/. Anything unmatched here 404s (the app reads a
-	// 404 as "no companion", §5) — it must never fall through to the proxy.
+	// 404 as "no companion") — it must never fall through to the proxy.
 	companionMux := http.NewServeMux()
 	companionMux.HandleFunc("GET /companion/v1/info", info.ServeHTTP)
 

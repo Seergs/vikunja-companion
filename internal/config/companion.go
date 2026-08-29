@@ -7,11 +7,11 @@ import (
 )
 
 // DefaultRelayURL is the project-operated relay used when COMPANION_RELAY_URL is
-// unset. Placeholder until the relay is deployed (docs/COMPANION.md §6.6).
+// unset. Placeholder until the relay is deployed.
 const DefaultRelayURL = "https://relay.vikunja-companion.invalid"
 
 // KnownWebhookEvents is the complete v1 push surface: the only user-directed
-// webhook events Vikunja emits (docs/COMPANION.md §6.2).
+// webhook events Vikunja emits.
 var KnownWebhookEvents = []string{
 	"task.reminder.fired",
 	"task.overdue",
@@ -19,7 +19,7 @@ var KnownWebhookEvents = []string{
 }
 
 // APNS holds a bring-your-own Apple Push credential set. When set, the companion
-// talks to APNs directly and bypasses the relay (docs/COMPANION.md §6.6).
+// talks to APNs directly and bypasses the relay.
 type APNS struct {
 	KeyPath string
 	KeyID   string

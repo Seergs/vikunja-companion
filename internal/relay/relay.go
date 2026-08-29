@@ -1,5 +1,4 @@
-// Package relay holds both sides of the content-blind APNs relay
-// (docs/COMPANION.md §6.6):
+// Package relay holds both sides of the content-blind APNs relay:
 //
 //   - the client the companion uses to register once and push ciphertext
 //     ({apns_token, ciphertext, collapse_id});

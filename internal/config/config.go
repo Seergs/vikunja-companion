@@ -1,5 +1,5 @@
 // Package config loads and validates the environment-first configuration for
-// both binaries. See docs/COMPANION.md §7.
+// both binaries.
 package config
 
 import (

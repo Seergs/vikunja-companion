@@ -2,7 +2,7 @@ package config
 
 import "errors"
 
-// Relay is the validated configuration for cmd/relay (docs/COMPANION.md §6.6).
+// Relay is the validated configuration for cmd/relay.
 type Relay struct {
 	ListenAddr string
 	APNS       APNS

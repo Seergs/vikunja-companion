@@ -1,5 +1,5 @@
 // Package webhook verifies, parses, and reconciles Vikunja's user-level
-// webhooks (docs/COMPANION.md §6.2–§6.4).
+// webhooks.
 //
 // v1 surface is exactly three user-directed events:
 //
@@ -12,9 +12,8 @@
 // for every user, so the handler identifies the sender by trying each stored
 // HMAC secret against the raw body.
 //
-// NOTE (docs/COMPANION.md §11): the exact JSON shape of `data` for each event
-// is assumed, not verified. Confirm against a live /api/v1/docs before
-// implementing parsing.
+// The exact JSON shape of `data` for each event is assumed, not verified —
+// confirm against a live /api/v1/docs before implementing parsing.
 package webhook
 
 // TODO(fase-2): VerifySignature; ParseEvent; Registrar (reconcile on

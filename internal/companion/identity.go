@@ -1,6 +1,5 @@
 // Package companion assembles the HTTP surface of cmd/companion: the
-// /companion/v1/* feature routes and the catch-all reverse proxy to Vikunja
-// (docs/COMPANION.md §3–§5).
+// /companion/v1/* feature routes and the catch-all reverse proxy to Vikunja.
 package companion
 
 import (
@@ -25,7 +24,7 @@ type userResolver interface {
 	User(ctx context.Context, token string) (*vikunja.User, error)
 }
 
-// Identity is a resolved caller (docs/COMPANION.md §3).
+// Identity is a resolved caller.
 type Identity struct {
 	UserID   int64
 	Username string
