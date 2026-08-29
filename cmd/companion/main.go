@@ -4,16 +4,12 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/seergs/vikunja-companion/internal/config"
+	"github.com/seergs/vikunja-companion/internal/httpx"
 )
 
 // Version is injected at build time via -ldflags "-X main.Version=...".
@@ -32,7 +28,7 @@ func run() error {
 		return err
 	}
 
-	log := newLogger(cfg.LogLevel)
+	log := httpx.Logger(cfg.LogLevel)
 	slog.SetDefault(log)
 	log.Info("starting companion",
 		"version", Version,
@@ -51,42 +47,5 @@ func run() error {
 	// TODO(fase-1): mount internal/proxy for everything not under /companion/,
 	// and the /companion/v1/* routes (info, devices, settings, webhooks/vikunja).
 
-	return serve(cfg.ListenAddr, mux, log)
-}
-
-func newLogger(level string) *slog.Logger {
-	var l slog.Level
-	if err := l.UnmarshalText([]byte(level)); err != nil {
-		l = slog.LevelInfo
-	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
-}
-
-// serve runs srv until an interrupt signal, then shuts down gracefully.
-func serve(addr string, h http.Handler, log *slog.Logger) error {
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           h,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	errCh := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-	}()
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		log.Info("shutting down")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutdownCtx)
-	}
+	return httpx.Serve(cfg.ListenAddr, mux, log)
 }
