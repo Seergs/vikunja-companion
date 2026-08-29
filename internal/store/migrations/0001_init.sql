@@ -42,3 +42,9 @@ CREATE TABLE notifications_sent (
     dedupe_key TEXT PRIMARY KEY,
     sent_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Small key/value store for singleton state (e.g. the relay registration token).
+CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

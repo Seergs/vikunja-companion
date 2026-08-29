@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,14 +12,19 @@ import (
 
 	"github.com/seergs/vikunja-companion/internal/companion"
 	"github.com/seergs/vikunja-companion/internal/config"
+	"github.com/seergs/vikunja-companion/internal/crypto"
 	"github.com/seergs/vikunja-companion/internal/httpx"
+	"github.com/seergs/vikunja-companion/internal/notify"
 	"github.com/seergs/vikunja-companion/internal/proxy"
+	"github.com/seergs/vikunja-companion/internal/relay"
 	"github.com/seergs/vikunja-companion/internal/store"
 	"github.com/seergs/vikunja-companion/internal/vikunja"
 )
 
 // Version is injected at build time via -ldflags "-X main.Version=...".
 var Version = "dev"
+
+const relayTokenKey = "relay_token"
 
 func main() {
 	if err := run(); err != nil {
@@ -59,6 +65,11 @@ func run() error {
 	defer db.Close()
 	log.Info("database ready", "path", cfg.DBPath)
 
+	cipher, err := crypto.NewCipher(cfg.MasterKey)
+	if err != nil {
+		return err
+	}
+
 	vk := vikunja.NewClient(cfg.UpstreamURL, nil)
 
 	// Refuse to start unless the upstream is a reachable Vikunja instance.
@@ -68,6 +79,11 @@ func run() error {
 	}
 	log.Info("upstream reachable", "url", cfg.UpstreamURL, "vikunja_version", upstreamVersion)
 
+	dispatcher, err := buildDispatcher(context.Background(), cfg, db, cipher, log)
+	if err != nil {
+		return err
+	}
+
 	rp, err := proxy.New(cfg.UpstreamURL, log)
 	if err != nil {
 		return err
@@ -75,14 +91,48 @@ func run() error {
 
 	handler := companion.NewRouter(companion.Options{
 		Version:       Version,
+		PublicURL:     cfg.PublicURL,
 		VikunjaURL:    cfg.UpstreamURL,
 		VikunjaClient: vk,
 		Proxy:         rp,
 		Logger:        log,
 		SeedVersion:   upstreamVersion,
+		Store:         db,
+		Cipher:        cipher,
+		Dispatcher:    dispatcher,
+		WebhookEvents: cfg.WebhookEvents,
 	})
 
 	return httpx.Serve(cfg.ListenAddr, handler, log)
+}
+
+// buildDispatcher wires notify -> crypto seal -> relay push, registering a relay
+// token on first boot and persisting it.
+func buildDispatcher(ctx context.Context, cfg *config.Companion, db *store.DB, cipher *crypto.Cipher, log *slog.Logger) (*notify.Dispatcher, error) {
+	token := cfg.RelayToken
+	if token == "" {
+		if stored, err := db.Meta(ctx, relayTokenKey); err == nil {
+			token = stored
+		}
+	}
+
+	rc := relay.NewClient(cfg.RelayURL, token, nil)
+	if token == "" {
+		regCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		if minted, err := rc.Register(regCtx); err != nil {
+			// Non-fatal: the companion still proxies and receives webhooks; push
+			// delivery just fails (and logs) until the relay is reachable.
+			log.Warn("could not register with relay — push delivery disabled until it is reachable",
+				"relay", cfg.RelayURL, "err", err)
+		} else if err := db.SetMeta(ctx, relayTokenKey, minted); err != nil {
+			return nil, err
+		} else {
+			log.Info("registered with relay", "relay", cfg.RelayURL)
+		}
+	}
+
+	return notify.New(db, sealer{}, pusher{rc}, log), nil
 }
 
 // probeUpstream confirms VIKUNJA_UPSTREAM_URL answers GET /api/v1/info with a
@@ -96,7 +146,25 @@ func probeUpstream(vk *vikunja.Client) (string, error) {
 		return "", err
 	}
 	if info.Version == "" {
-		return "", fmt.Errorf("/api/v1/info returned no version — not a Vikunja instance?")
+		return "", errors.New("/api/v1/info returned no version — not a Vikunja instance?")
 	}
 	return info.Version, nil
+}
+
+// sealer adapts crypto.Seal to notify.Sealer.
+type sealer struct{}
+
+func (sealer) Seal(plaintext, devicePublicKey []byte) ([]byte, error) {
+	return crypto.Seal(plaintext, devicePublicKey)
+}
+
+// pusher adapts *relay.Client to notify.Pusher.
+type pusher struct{ c *relay.Client }
+
+func (p pusher) Push(ctx context.Context, n notify.Push) error {
+	return p.c.Push(ctx, relay.PushRequest{
+		APNsToken:  n.APNsToken,
+		Ciphertext: n.Ciphertext,
+		CollapseID: n.CollapseID,
+	})
 }
