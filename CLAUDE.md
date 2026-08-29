@@ -95,7 +95,7 @@ make vet
 make tidy
 go test ./internal/webhook/                        # one package
 go test -run TestVerifySignature ./internal/webhook/   # one test
-go run ./cmd/companion    # reads env; see .env.example
+go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.example
 ```
 
 - **Builds must stay CGO-free** (`CGO_ENABLED=0`). The SQLite driver is
@@ -130,3 +130,7 @@ go run ./cmd/companion    # reads env; see .env.example
 - `internal/store` runs plain `.sql` files embedded from `migrations/`, tracked
   in a `schema_migrations` table, each in its own transaction. Add a migration,
   never edit an applied one. `Open(":memory:")` works for tests.
+- `config.LoadDotenv` (called first in both `main`s) loads `./.env` via
+  `github.com/joho/godotenv` for local dev only — no-op when the file is absent,
+  never overrides a real env var. Config stays env-first; nothing else reads the
+  file. `.env` is gitignored and not in the image.

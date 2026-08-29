@@ -23,6 +23,11 @@ func main() {
 }
 
 func run() error {
+	envFile, err := config.LoadDotenv()
+	if err != nil {
+		return err
+	}
+
 	cfg, err := config.LoadRelay()
 	if err != nil {
 		return err
@@ -30,6 +35,9 @@ func run() error {
 
 	log := httpx.Logger(cfg.LogLevel)
 	slog.SetDefault(log)
+	if envFile != "" {
+		log.Info("loaded local env file", "path", envFile)
+	}
 	log.Info("starting relay",
 		"version", Version,
 		"listen", cfg.ListenAddr,
