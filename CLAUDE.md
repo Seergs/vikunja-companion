@@ -22,16 +22,16 @@ routes are Fase 2). All of the above is tested.
 Still doc-comment-only stubs: `internal/webhook`, `internal/notify`,
 `internal/crypto`, `internal/relay`.
 
-- **Fase 2** (blocked on the §11 checklist against a live `/api/v1/docs`):
+- **Fase 2** (blocked on the section 11 checklist against a live `/api/v1/docs`):
   webhook verify/parse/reconcile, notify dispatch + dedupe, NaCl sealing +
   token-at-rest encryption, the relay client and server, and the
   `/companion/v1/devices` + `/companion/v1/settings` routes.
 
 Not yet present: `LICENSE` (AGPLv3 text — drop it in).
 
-`docs/COMPANION.md` is the source of truth for *why*. Read §6 (push) and §11
-(verification checklist) before touching `internal/webhook` or
-`internal/vikunja`.
+`docs/COMPANION.md` is the source of truth for *why* (sections 6 and 11 before
+touching `internal/webhook` or `internal/vikunja`);
+`docs/webhooks-verified.md` has the concrete Vikunja payloads and routes.
 
 ## What this is
 
@@ -68,7 +68,7 @@ clients; the NSE holds the X25519 private key and decrypts payloads on-device.
 - **Relay never sees content.** Notification JSON is sealed with a NaCl sealed
   box (`crypto_box_seal`) to the device's X25519 public key before it leaves the
   companion. Keep the `notify` delivery path encryption-agnostic via the
-  `NotificationSource` interface (§9) so post-v1 sources slot in without touching
+  `NotificationSource` interface (section 9) so post-v1 sources slot in without touching
   delivery/crypto.
 - **v1 push surface is exactly three user-level webhook events:**
   `task.reminder.fired`, `task.overdue`, `tasks.overdue`. One webhook
@@ -105,7 +105,7 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
   not a place to add a connection pool.
 - Deployment is one multi-arch image with two binaries
   (`docker-compose.example.yml`); the relay runs via `--entrypoint`. Config is
-  env-first (`.env.example`, `docs/COMPANION.md` §7).
+  env-first (`.env.example`, `docs/COMPANION.md` section 7).
 
 ## Package notes
 
@@ -123,7 +123,7 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
   (`COMPANION_WEBHOOK_EVENTS`). Reconcile runs on device (de)registration, on
   settings change, and on an hourly timer.
 - `main.Version` is `-ldflags "-X main.Version=..."` injected per binary.
-- `internal/companion` (not in §7's list) assembles `cmd/companion`'s HTTP
+- `internal/companion` (not in section 7's list) assembles `cmd/companion`'s HTTP
   surface — `NewRouter` mounts the `/companion/v1/*` routes and sends everything
   else to `internal/proxy`. The identity cache lives here too. `internal/httpx`
   holds the logger + graceful-shutdown server loop shared by both `main`s.

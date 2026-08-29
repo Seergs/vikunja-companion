@@ -1,7 +1,7 @@
 # Vikunja webhooks — verified reference
 
 Concrete facts for implementing `internal/webhook` and the webhook routes in
-`internal/vikunja`. Resolves the `docs/COMPANION.md` §11 checklist.
+`internal/vikunja`. Resolves the `docs/COMPANION.md` section 11 checklist.
 
 **Verified against:** `tasks.sergiosuarez.dev`, Vikunja **`v2.5.0`**, on
 2026-08-29 — via `GET /api/v1/info`, `GET /api/v1/docs.json` (Swagger 2.0), and
