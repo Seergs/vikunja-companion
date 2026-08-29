@@ -7,13 +7,13 @@
 //	task.overdue
 //	tasks.overdue
 //
-// Inbound auth: X-Vikunja-Signature = hex(HMAC-SHA256(rawBody, secret)),
-// constant-time compare, reject on mismatch/missing. The target_url is identical
-// for every user, so the handler identifies the sender by trying each stored
-// HMAC secret against the raw body.
+// Inbound auth: X-Vikunja-Signature = lowercase hex(HMAC-SHA256(rawBody,
+// secret)), constant-time compare, reject on mismatch/missing. The target_url is
+// identical for every user, so the handler identifies the sender by trying each
+// stored HMAC secret against the raw body.
 //
-// The exact JSON shape of `data` for each event is assumed, not verified —
-// confirm against a live /api/v1/docs before implementing parsing.
+// The envelope is {event_name, time, data}. The data shapes, the management
+// routes, and their quirks are written up in docs/webhooks-verified.md.
 package webhook
 
 // TODO(fase-2): VerifySignature; ParseEvent; Registrar (reconcile on

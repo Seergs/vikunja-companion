@@ -435,16 +435,25 @@ these slot in without touching delivery/encryption:
 
 ## 11. To verify against a live instance (`/api/v1/docs`)
 
-Before writing webhook-handling code, confirm on a real, current Vikunja:
+Done, 2026-08-29, against Vikunja `v2.5.0` + `go-vikunja/vikunja@main` source.
+Results and the concrete payload shapes live in
+[`webhooks-verified.md`](webhooks-verified.md). Summary:
 
-- [ ] Exact JSON shape of `data` for `task.reminder.fired`, `task.overdue`,
-      `tasks.overdue` (esp. the batch event's task list + user fields).
-- [ ] `X-Vikunja-Signature` is `hex(HMAC-SHA256(rawBody, secret))` (source says
-      yes; confirm encoding).
-- [ ] User-webhook routes: `GET` / `PUT /api/v1/user/settings/webhooks`,
-      `POST`/`DELETE .../{id}`, `GET .../events`.
-- [ ] User-webhook create rejects non-user-directed events (assumed).
-- [ ] Minimum Vikunja version with user-level webhooks + these three events.
-- [ ] `GET /api/v1/notifications` pagination + payload (for the §9 poller).
-- [ ] Whether `webhooks.enabled` is on for the target instance, and routability
-      of the companion's URL from Vikunja.
+- [x] `data` shape for the three events — keys are `task` / `user` / `project`
+      (+ `reminder`), and `tasks` / `user` / `projects` for the batch. `user` is
+      the recipient; there is no `doer` on these events.
+- [x] `X-Vikunja-Signature` = **lowercase `hex(HMAC-SHA256(rawBody, secret))`**.
+- [x] User-webhook routes confirmed. `POST .../{id}` updates **`events` only** —
+      `target_url` and `secret` are immutable, `secret` is never returned.
+- [x] User-webhook create rejects non-user-directed events (`400`, field
+      `events`) — enforced in `Webhook.Create`.
+- [x] Don't pin a version — probe `webhooks_enabled` + `.../webhooks/events` at
+      runtime. Test instance: `webhooks_enabled: true`.
+- [x] `GET /api/v1/notifications` — `page`/`per_page`, headers
+      `x-pagination-total-pages` / `x-pagination-result-count`.
+- [x] Routability: SSRF-safe client drops non-routable targets unless
+      `webhooks.allownonroutableips`.
+- ⚠︎ Still needs a token: live event-list JSON, one real delivery end-to-end,
+      the `400` rejection, a real notifications page.
+- ⚠︎ Retries: newer Vikunja retries deliveries (was "never" in this doc);
+      unconfirmed for `v2.5.0`. Dedupe regardless.

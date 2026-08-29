@@ -56,8 +56,8 @@ func IsUnauthorized(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusUnauthorized
 }
 
-// Info is the subset of GET /api/v1/info the companion needs. The full response
-// shape is not verified against a live instance; only `version` is relied on.
+// Info is the subset of GET /api/v1/info the companion needs. The response
+// carries far more (see docs/webhooks-verified.md); only `version` is relied on.
 type Info struct {
 	Version string `json:"version"`
 }
