@@ -25,15 +25,16 @@ CREATE TABLE devices (
 
 CREATE INDEX idx_devices_user ON devices(user_id);
 
--- One user-level Vikunja webhook registration per user. secret is the HMAC key;
--- events is a comma-separated subset of the three v1 events.
+-- One row per user, holding the HMAC secret for the webhook the user created by
+-- hand in Vikunja (the companion cannot manage it via the API). events is a
+-- comma-separated subset of the three v1 events the user wants forwarded.
 CREATE TABLE webhooks (
-    user_id    INTEGER PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-    vikunja_id INTEGER NOT NULL,
-    secret     TEXT NOT NULL,
-    events     TEXT NOT NULL,
-    target_url TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    user_id          INTEGER PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    secret_enc       BLOB NOT NULL,                 -- HMAC key, encrypted with COMPANION_MASTER_KEY
+    events           TEXT NOT NULL,
+    last_delivery_at TEXT,                          -- updated on every verified inbound delivery
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Delivery dedupe by event fingerprint.

@@ -71,6 +71,16 @@ func Open(path string) (*DB, error) {
 // Close closes the underlying database.
 func (db *DB) Close() error { return db.sql.Close() }
 
+// parseDBTime parses a timestamp written by SQLite's datetime('now')
+// ("2006-01-02 15:04:05", UTC). Returns the zero time on any failure.
+func parseDBTime(s string) time.Time {
+	t, err := time.Parse("2006-01-02 15:04:05", s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.UTC()
+}
+
 // migrate applies every embedded migration not yet recorded in
 // schema_migrations, in filename order, each in its own transaction.
 func (db *DB) migrate(ctx context.Context) error {
