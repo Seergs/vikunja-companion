@@ -102,9 +102,11 @@ The companion has **no accounts, no login, no registration** of its own.
 
 The companion **stores the Vikunja API token** (encrypted at rest with a
 companion master key from env) because it needs to act as the user between app
-sessions — to reconcile the webhook registration and, later, to run the digest
-cron. This is the same token already flowing through the proxy; storing it is a
-sensitivity point called out in 8.
+sessions — to read tasks for the digest cron and to poll
+`/api/v1/notifications` post-v1. It is **not** used to manage the webhook: a
+Vikunja API token cannot call `/api/v1/user/settings/webhooks*` at all (see 6.3
+and `webhooks-verified.md`). This is the same token already flowing through the
+proxy; storing it is a sensitivity point called out in 8.
 
 ---
 
@@ -205,24 +207,49 @@ Project-level events (comments, assignments, mentions) are **not** in v1. The
 future path for those is a `/api/v1/notifications` poller (9), not
 project-webhook registration.
 
-### 6.3 Webhook registration & reconciliation
+### 6.3 Webhook registration — manual, one-time (decision, 2026-08-29)
 
-When the app registers a device (6.4), the companion — using that user's
-stored token — ensures a user-level webhook exists:
+**The user registers the webhook by hand in Vikunja's web UI.** The companion
+does not create, read, update, or reconcile it.
 
-1. `GET /api/v1/user/settings/webhooks` → look for one whose `target_url` is
-   `{COMPANION_PUBLIC_URL}/companion/v1/webhooks/vikunja`.
-2. If missing: `PUT` it with `events` = the configured set (default all three)
-   and a fresh random `secret` (HMAC key), stored in SQLite.
-3. If present but events drifted from the user's current preferences: `POST
-   /api/v1/user/settings/webhooks/{id}` to update.
-4. Re-run this check on every device re-registration and on a slow timer (e.g.
-   hourly) so a webhook deleted in Vikunja's UI self-heals.
+Why: a Vikunja API token (`tk_…`) — the only credential the companion holds —
+**cannot touch `/api/v1/user/settings/webhooks*`**. It is not a grantable scope;
+every multi-segment `/api/v1/user/...` route is excluded from API-token auth in
+Vikunja's code (`CanDoAPIRoute`). Only a JWT from an interactive login can
+manage user-level webhooks, and the companion has no login. Details and the
+alternatives considered (app-side JWT, OAuth2 client) are in
+`webhooks-verified.md`.
+
+Flow:
+
+1. The app offers a **"Set up push" screen**. It calls
+   `GET /companion/v1/webhooks/setup` (authenticated with the user's token),
+   which returns `{ target_url, secret, events }` — the companion generates and
+   stores the `secret` (HMAC key) keyed by `user_id`, idempotently.
+2. The user opens Vikunja → **Settings → Webhooks → Create**, and pastes:
+   - **Target URL:** `{COMPANION_PUBLIC_URL}/companion/v1/webhooks/vikunja`
+   - **Secret:** the value from step 1
+   - **Events:** the three (`task.reminder.fired`, `task.overdue`,
+     `tasks.overdue`)
+3. The app confirms by asking the companion whether a verified delivery has
+   arrived (a test can be forced by setting a reminder ~1 min out).
+
+Consequences of no reconciliation:
+
+- If the user deletes the webhook in Vikunja, push stops and the companion
+  **cannot detect it** (listing webhooks is the same blocked route). Mitigation:
+  the companion records `last_delivery_at` and exposes it in
+  `/companion/v1/info`; the app shows a soft warning after a long silence
+  ("no signal from Vikunja in N days — check Settings → Webhooks").
+- `events` drift (per-type toggles) also can't be pushed to Vikunja. v1: the app
+  tells the user which events to tick; the companion just filters what it
+  forwards.
 
 Prerequisites, surfaced by the companion in `/companion/v1/info` and in its
 startup logs if unmet:
 
-- `webhooks.enabled` = true on the Vikunja instance (default true).
+- `webhooks.enabled` = true on the Vikunja instance (default true). Read from
+  `GET /api/v1/info` → `webhooks_enabled`.
 - If the companion is on a non-routable IP relative to Vikunja, the instance
   needs `webhooks.allownonroutableips` = true. Better: give the companion a
   real hostname.
@@ -250,10 +277,12 @@ Vikunja ──POST──► /companion/v1/webhooks/vikunja
   task.
 - Deep links use the app's existing URL scheme (`VikunjaWidgetConfig` scheme):
   reminder/overdue → the task; batch overdue → the Today screen.
-- **Payload shapes** (`data` for `tasks.overdue`, header name, etc.) must be
-  verified against a live instance's `/api/v1/docs` before coding — same rule
-  the app's DTOs follow. Known: header is `X-Vikunja-Signature`, body wrapper
-  is `{event_name, time, data}`, task events include the full task + `doer`.
+- **Payload shapes** are verified — see `webhooks-verified.md`. Header is
+  `X-Vikunja-Signature` = lowercase `hex(HMAC-SHA256(rawBody, secret))`; body is
+  `{event_name, time, data}`; for these three events `data` carries `task` /
+  `user` / `project` (`user` is the **recipient**, not a `doer` — there is no
+  self-authored noise to drop), and the batch carries `tasks` / `user` /
+  `projects` (a map keyed by project id).
 
 ### 6.5 End-to-end encryption
 
@@ -322,8 +351,11 @@ Tracked here so they're not a surprise:
   alongside `/api/v1/info`.
 - A **Notifications** screen (likely folded into `Features/Settings`, or a new
   `Features/Notifications`) — visible only when `hasCompanion` — with per-type
-  toggles (reminders, overdue) that map to the webhook `events` set the
-  companion registers.
+  toggles (reminders, overdue) that narrow what the companion forwards.
+- A **"Set up push"** step: fetch `GET /companion/v1/webhooks/setup`, show the
+  `target_url` + `secret` + events for the user to paste into Vikunja → Settings
+  → Webhooks, then confirm a delivery arrived. Also surface the "no signal in N
+  days" warning from `/companion/v1/info`'s `last_delivery_at`.
 - Keychain: X25519 private key in the shared access group.
 
 ---
@@ -338,8 +370,8 @@ vikunja-companion/
 ├── cmd/relay/            # the content-blind APNs relay (maintainer-operated)
 ├── internal/
 │   ├── proxy/            # reverse proxy to Vikunja
-│   ├── vikunja/          # thin API client (info, user, webhooks, tasks)
-│   ├── webhook/          # HMAC verify, event parsing, registration/reconcile
+│   ├── vikunja/          # thin API client (info, user, tasks)
+│   ├── webhook/          # HMAC verify, event parsing, setup-helper
 │   ├── notify/           # event → notification, dedupe, NotificationSource seam
 │   ├── crypto/           # NaCl sealed box
 │   ├── relay/            # relay client (companion side) + relay server
@@ -380,8 +412,9 @@ COMPANION_LOG_LEVEL=info
   time compare, reject on mismatch or missing secret.
 - **Rate limiting** on `/companion/v1/*` (per token) and on the relay (per
   registration token).
-- **Vikunja token at rest**: encrypted with `COMPANION_MASTER_KEY`. Deleting a
-  user's last device deletes the stored token and the webhook registration.
+- **Secrets at rest**: the Vikunja API token and the webhook HMAC secret are
+  encrypted with `COMPANION_MASTER_KEY`. Deleting a user's last device deletes
+  both. The Vikunja-side webhook is the user's to remove (the companion can't).
 - **E2E encryption** means a compromised relay leaks nothing about content;
   sealed-box ephemeral keys give per-message forward secrecy.
 - **No caching** of authenticated proxied responses.

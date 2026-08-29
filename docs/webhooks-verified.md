@@ -13,7 +13,7 @@ live API token, and the Vikunja source (`go-vikunja/vikunja@main`:
 
 ---
 
-## BLOCKER: API tokens cannot manage user-level webhooks
+## API tokens cannot manage user-level webhooks (resolved: manual setup)
 
 A Vikunja API token (`tk_…`) **cannot call `/api/v1/user/settings/webhooks*`**.
 Not a scope you can grant — a hard exclusion in Vikunja:
@@ -27,7 +27,7 @@ Confirmed live: with a token that reads `/projects`, `/labels`,
 `/api/v1/user/settings/webhooks` → **401 `code 11`**. Only a **JWT** (from an
 interactive local / LDAP / OIDC login) can manage user-level webhooks.
 
-This breaks `docs/COMPANION.md` section 3 + 6.3: the companion was to store the
+This changed `docs/COMPANION.md` section 3 + 6.3: the companion was to store the
 user's API token and use it to create/reconcile the user-level webhook. It
 can't. Poll is not a clean fallback either — the reminder/overdue crons only
 write the `/api/v1/notifications` row when
@@ -39,18 +39,24 @@ the webhook was the design's reliable path. On the test account
 `email_reminders_enabled` is already `false`, so a poller would see no reminder
 notifications at all.
 
-Options (decision pending, tracked in `docs/COMPANION.md`):
+### Decision (2026-08-29): Option E — manual, one-time setup
 
-- **A — the iOS app registers the webhook with its own JWT.** The app logs the
-  user in (OIDC/local) and holds a JWT; on enabling push it `PUT`s the webhook
-  pointing at the companion with a secret it generates, then hands the companion
-  the secret via device registration. The companion only verifies inbound
-  deliveries — it never calls the webhook API. Reconcile moves to "every app
-  launch". Needs the app to model JWT auth (today it only does API tokens).
-- **B — the companion becomes an OAuth2 client of Vikunja.** Vikunja exposes
-  `/api/v1/oauth/authorize` + `/oauth/token`; a proper delegated grant with
-  refresh gives the companion durable JWT access. Bigger lift, needs the user to
-  register an OAuth app.
+The user creates the webhook by hand in Vikunja's web UI. The companion never
+calls the webhook API. `GET /companion/v1/webhooks/setup` hands the app
+`{target_url, secret, events}` to display; the companion stores the secret and
+only verifies inbound deliveries. No reconciliation — it can't even detect a
+deleted webhook (listing is the same blocked route), so it records
+`last_delivery_at` and the app nudges after a long silence. Keeps the
+API-token-only identity model intact. Written up in `docs/COMPANION.md` 6.3.
+
+Options that were considered and rejected:
+
+- **A — the iOS app registers the webhook with its own JWT.** Needs the app to
+  model JWT auth (today it only does API tokens) and to reconcile on every
+  launch. More app work than E for a marginal self-healing gain.
+- **B — the companion becomes an OAuth2 client of Vikunja.** Durable delegated
+  JWT via `/api/v1/oauth/authorize` + `/oauth/token`, but a big lift and the
+  user must register an OAuth app. Overkill for one webhook.
 - **C — project-level webhooks.** Dead end: the three user-directed events are
   only dispatched to *user-level* webhooks (`listeners.go` ~L1536), so a project
   webhook subscribed to `task.overdue` never fires.

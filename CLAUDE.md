@@ -22,9 +22,10 @@ routes are Fase 2). All of the above is tested.
 Still doc-comment-only stubs: `internal/webhook`, `internal/notify`,
 `internal/crypto`, `internal/relay`.
 
-- **Fase 2** (blocked on the section 11 checklist against a live `/api/v1/docs`):
-  webhook verify/parse/reconcile, notify dispatch + dedupe, NaCl sealing +
-  token-at-rest encryption, the relay client and server, and the
+- **Fase 2** (Vikunja side verified — see `docs/webhooks-verified.md`):
+  webhook HMAC verify + event parsing + `/companion/v1/webhooks/setup` and
+  `/companion/v1/webhooks/vikunja`, notify dispatch + dedupe, NaCl sealing +
+  token/secret-at-rest encryption, the relay client and server, and the
   `/companion/v1/devices` + `/companion/v1/settings` routes.
 
 Not yet present: `LICENSE` (AGPLv3 text — drop it in).
@@ -71,18 +72,23 @@ clients; the NSE holds the X25519 private key and decrypts payloads on-device.
   `NotificationSource` interface (section 9) so post-v1 sources slot in without touching
   delivery/crypto.
 - **v1 push surface is exactly three user-level webhook events:**
-  `task.reminder.fired`, `task.overdue`, `tasks.overdue`. One webhook
-  registration per user via `PUT /api/v1/user/settings/webhooks`. No
-  project-level webhooks in v1 (that's a post-v1 `/api/v1/notifications` poller).
-  Prefer the `tasks.overdue` batch event over N × `task.overdue`.
-- **Webhook auth:** verify `X-Vikunja-Signature` = `hex(HMAC-SHA256(rawBody, secret))`
-  on every inbound webhook, constant-time compare, reject on mismatch/missing.
-- **Self-healing registration:** reconcile the user's webhook on every device
-  re-registration and on a slow timer, so a webhook deleted in Vikunja's UI
-  comes back.
-- **Secrets at rest:** the stored Vikunja API token is encrypted with
-  `COMPANION_MASTER_KEY`. Deleting a user's last device deletes both the stored
-  token and the webhook registration.
+  `task.reminder.fired`, `task.overdue`, `tasks.overdue`. No project-level
+  webhooks in v1 (that's a post-v1 `/api/v1/notifications` poller). Prefer the
+  `tasks.overdue` batch event over N x `task.overdue`.
+- **The companion never calls Vikunja's webhook API.** A Vikunja API token
+  cannot reach `/api/v1/user/settings/webhooks*` (see `docs/webhooks-verified.md`).
+  The **user creates the webhook by hand** in Vikunja's UI; the companion serves
+  `GET /companion/v1/webhooks/setup` (`{target_url, secret, events}`) for the app
+  to display, stores the secret, and only verifies inbound deliveries. No
+  reconciliation, no self-healing — it records `last_delivery_at` and the app
+  nudges after a long silence.
+- **Webhook auth:** verify `X-Vikunja-Signature` = lowercase
+  `hex(HMAC-SHA256(rawBody, secret))` on every inbound webhook, constant-time
+  compare, reject on mismatch/missing.
+- **Secrets at rest:** the stored Vikunja API token and the webhook HMAC secret
+  are encrypted with `COMPANION_MASTER_KEY`. Deleting a user's last device
+  deletes the stored token and secret (the Vikunja-side webhook is the user's to
+  remove).
 
 ## Commands
 
@@ -114,14 +120,15 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
   mapping lives in the `Source` (today `internal/webhook/build.go`); post-v1
   sources (a `/api/v1/notifications` poller) plug in here without touching
   sealing or delivery.
-- `internal/webhook/handler.go` identifies the sending user by trying each
-  stored HMAC secret against the raw body — the webhook `target_url` is
-  identical for every user, so there is no per-request user hint before
-  verification.
-- Webhook event preferences are per-user, stored in the `webhooks.events`
-  column; `Registrar.desiredEvents` intersects them with the operator ceiling
-  (`COMPANION_WEBHOOK_EVENTS`). Reconcile runs on device (de)registration, on
-  settings change, and on an hourly timer.
+- `internal/webhook` handler identifies the sending user by trying each stored
+  HMAC secret against the raw body — the webhook `target_url` is identical for
+  every user, so there is no per-request user hint before verification.
+- Webhook setup is manual (see invariants). `GET /companion/v1/webhooks/setup`
+  generates + stores a per-user secret and returns it with the target URL and
+  the event list, all idempotent. `COMPANION_WEBHOOK_EVENTS` is the operator
+  ceiling for which events that endpoint advertises and which the handler
+  forwards; per-user event prefs just narrow that further, they are not pushed
+  back to Vikunja.
 - `main.Version` is `-ldflags "-X main.Version=..."` injected per binary.
 - `internal/companion` (not in section 7's list) assembles `cmd/companion`'s HTTP
   surface — `NewRouter` mounts the `/companion/v1/*` routes and sends everything
