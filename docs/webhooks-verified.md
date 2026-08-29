@@ -4,12 +4,76 @@ Concrete facts for implementing `internal/webhook` and the webhook routes in
 `internal/vikunja`. Resolves the `docs/COMPANION.md` section 11 checklist.
 
 **Verified against:** `tasks.sergiosuarez.dev`, Vikunja **`v2.5.0`**, on
-2026-08-29 — via `GET /api/v1/info`, `GET /api/v1/docs.json` (Swagger 2.0), and
-the Vikunja source (`go-vikunja/vikunja@main`: `pkg/models/events.go`,
-`pkg/models/webhooks.go`, `pkg/models/listeners.go`, `pkg/config/config.go`).
+2026-08-29 — via `GET /api/v1/info`, `GET /api/v1/docs.json` (Swagger 2.0), a
+live API token, and the Vikunja source (`go-vikunja/vikunja@main`:
+`pkg/models/events.go`, `pkg/models/webhooks.go`, `pkg/models/listeners.go`,
+`pkg/models/api_routes.go`, `pkg/models/task_reminder.go`,
+`pkg/models/task_overdue_reminder.go`, `pkg/routes/routes.go`,
+`pkg/routes/api_tokens.go`, `pkg/config/config.go`).
 
-Items marked ⚠︎ still need a live authenticated call to fully confirm — see
-"Left to check with a token" at the bottom.
+---
+
+## BLOCKER: API tokens cannot manage user-level webhooks
+
+A Vikunja API token (`tk_…`) **cannot call `/api/v1/user/settings/webhooks*`**.
+Not a scope you can grant — a hard exclusion in Vikunja:
+`CollectRoutesForAPITokenUsage` (`pkg/models/api_routes.go`) early-returns for
+every route whose group name starts with `user_`, so `CanDoAPIRoute` can never
+authorise those paths for any token. The auth middleware then 401s
+(`code 11`, "invalid token").
+
+Confirmed live: with a token that reads `/projects`, `/labels`,
+`/notifications`, `/tasks` fine, both `GET` and `PUT`
+`/api/v1/user/settings/webhooks` → **401 `code 11`**. Only a **JWT** (from an
+interactive local / LDAP / OIDC login) can manage user-level webhooks.
+
+This breaks `docs/COMPANION.md` section 3 + 6.3: the companion was to store the
+user's API token and use it to create/reconcile the user-level webhook. It
+can't. Poll is not a clean fallback either — the reminder/overdue crons only
+write the `/api/v1/notifications` row when
+`ServiceEnableEmailReminders && MailerEnabled` **and** the user's own
+`email_reminders_enabled` / `overdue_tasks_reminders_enabled` is on
+(`task_reminder.go`, `task_overdue_reminder.go`). The webhook events fire
+whenever `webhooks.enabled`, independent of any of that — which is exactly why
+the webhook was the design's reliable path. On the test account
+`email_reminders_enabled` is already `false`, so a poller would see no reminder
+notifications at all.
+
+Options (decision pending, tracked in `docs/COMPANION.md`):
+
+- **A — the iOS app registers the webhook with its own JWT.** The app logs the
+  user in (OIDC/local) and holds a JWT; on enabling push it `PUT`s the webhook
+  pointing at the companion with a secret it generates, then hands the companion
+  the secret via device registration. The companion only verifies inbound
+  deliveries — it never calls the webhook API. Reconcile moves to "every app
+  launch". Needs the app to model JWT auth (today it only does API tokens).
+- **B — the companion becomes an OAuth2 client of Vikunja.** Vikunja exposes
+  `/api/v1/oauth/authorize` + `/oauth/token`; a proper delegated grant with
+  refresh gives the companion durable JWT access. Bigger lift, needs the user to
+  register an OAuth app.
+- **C — project-level webhooks.** Dead end: the three user-directed events are
+  only dispatched to *user-level* webhooks (`listeners.go` ~L1536), so a project
+  webhook subscribed to `task.overdue` never fires.
+- **D — poll `/api/v1/notifications`.** Works with an API token, but only sees
+  reminder/overdue rows on a mailer-configured instance with the user's email
+  reminders enabled — unreliable, and the whole reason the design chose webhooks.
+
+---
+
+## Live check results (with an API token, 2026-08-29)
+
+- `GET /api/v1/user` → `{id, username, name, email, created, updated, settings{…},
+  is_admin, auth_provider, …}`. Our `vikunja.User{ID, Username}` is fine.
+  `settings.overdue_tasks_reminders_time` is `"9:00"` (string `H:MM`),
+  `settings.timezone` `"America/Mexico_City"`.
+- `GET /api/v1/notifications?page=&per_page=` → `200`, headers
+  `x-pagination-total-pages` + `x-pagination-result-count` present (both `0` on
+  an empty account). Also emits `access-control-expose-headers` listing them.
+- `GET /api/v1/user/settings/webhooks/events`, `GET /api/v1/user/settings/webhooks`,
+  `PUT /api/v1/user/settings/webhooks`, `GET /api/v1/tokens` → all **401 code 11**
+  (see blocker above).
+- Still unchecked (needs a JWT): the exact `.../webhooks/events` array, one real
+  delivery end-to-end, the non-user-directed-event `400`.
 
 ---
 
@@ -131,7 +195,7 @@ All under `/api/v1`, auth `Authorization: Bearer <token>`.
 | `PUT /user/settings/webhooks` | create one | body `models.Webhook`; returns `200` + the created webhook. `UserID` is set from auth — don't send it |
 | `POST /user/settings/webhooks/{id}` | **update `events` only** | "You cannot change other values of a webhook" — `target_url` and `secret` are immutable |
 | `DELETE /user/settings/webhooks/{id}` | delete one | returns `models.Message` |
-| `GET /user/settings/webhooks/events` ⚠︎ | list user-directed event names | array of strings; expected `["task.overdue","task.reminder.fired","tasks.overdue"]` |
+| `GET /user/settings/webhooks/events` | list user-directed event names | array of strings; expected `["task.overdue","task.reminder.fired","tasks.overdue"]` |
 | `GET /webhooks/events` | list **all** webhook events | not what you want for a user-level webhook |
 
 Create body that works:
@@ -175,7 +239,7 @@ dropped by the SSRF-safe HTTP client. Instance-side knobs (defaults in
 The design doc says Vikunja doesn't retry. **On `main` this has changed** — the
 webhook delivery listener now has per-delivery retry via watermill middleware
 (`pkg/models/listeners.go`, `WebhookDeliveryListener`). Whether that shipped in
-`v2.5.0` is ⚠︎ unconfirmed. Either way: dedupe on an event fingerprint
+`v2.5.0` is unconfirmed. Either way: dedupe on an event fingerprint
 (`notifications_sent`) so a retry or a poller-reconciled duplicate is dropped.
 
 ## Notifications endpoint (for the post-v1 poller)
@@ -195,13 +259,16 @@ Returns `v1.UserWithSettings` — includes `id`, `username`, `name`, `email`, pl
 
 ---
 
-## Left to check with a token
+## Left to check — needs a JWT (API token is not enough, see blocker)
 
-A read-only API token from the test instance would confirm:
-
-1. `GET /api/v1/user/settings/webhooks/events` — exact JSON array.
+1. `GET /api/v1/user/settings/webhooks/events` — exact JSON array (source says
+   `["task.overdue","task.reminder.fired","tasks.overdue"]`).
 2. `PUT` a throwaway webhook, then read one real delivery (e.g. set a reminder
    1–2 min out) to confirm the hex signature end-to-end and the exact `data`
    for `task.reminder.fired` / `tasks.overdue`.
-3. `PUT` with `events: ["task.created"]` → expect `400` invalid `events`.
-4. `GET /api/v1/notifications` — one real page, to see `notification` bodies.
+3. `PUT` with `events: ["task.created"]` on a user-level webhook → expect `400`
+   invalid `events`.
+
+A JWT can be lifted from the browser dev tools (the `Authorization: Bearer`
+header on any XHR while using the Vikunja web UI); it is short-lived, fine for a
+one-off check.

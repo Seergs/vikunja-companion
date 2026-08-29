@@ -453,7 +453,7 @@ Results and the concrete payload shapes live in
       `x-pagination-total-pages` / `x-pagination-result-count`.
 - [x] Routability: SSRF-safe client drops non-routable targets unless
       `webhooks.allownonroutableips`.
-- ⚠︎ Still needs a token: live event-list JSON, one real delivery end-to-end,
+- Still needs a token: live event-list JSON, one real delivery end-to-end,
       the `400` rejection, a real notifications page.
-- ⚠︎ Retries: newer Vikunja retries deliveries (was "never" in this doc);
+- Retries: newer Vikunja retries deliveries (was "never" in this doc);
       unconfirmed for `v2.5.0`. Dedupe regardless.
