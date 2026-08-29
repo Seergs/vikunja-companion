@@ -90,12 +90,12 @@ func TestIdentityCachePropagatesUpstreamError(t *testing.T) {
 
 func TestBearerToken(t *testing.T) {
 	cases := map[string]string{
-		"Bearer abc":  "abc",
-		"bearer xyz":  "xyz",
-		"BEARER  p ":  "p",
-		"Basic zzz":   "",
-		"":            "",
-		"Bearer":      "",
+		"Bearer abc": "abc",
+		"bearer xyz": "xyz",
+		"BEARER  p ": "p",
+		"Basic zzz":  "",
+		"":           "",
+		"Bearer":     "",
 	}
 	for header, want := range cases {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)

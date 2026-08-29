@@ -34,9 +34,9 @@ func New(upstreamURL string, log *slog.Logger) (*httputil.ReverseProxy, error) {
 		// streaming responses pass through without buffering.
 		FlushInterval: -1,
 		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.SetURL(target)          // scheme, host, path join, query — verbatim
-			pr.SetXForwarded()         // X-Forwarded-For/Host/Proto
-			pr.Out.Host = target.Host  // send the upstream's Host header
+			pr.SetURL(target)         // scheme, host, path join, query — verbatim
+			pr.SetXForwarded()        // X-Forwarded-For/Host/Proto
+			pr.Out.Host = target.Host // send the upstream's Host header
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Warn("proxy upstream error", "method", r.Method, "path", r.URL.Path, "err", err)
