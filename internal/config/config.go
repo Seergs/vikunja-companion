@@ -25,6 +25,17 @@ func get(key, def string) string {
 	return def
 }
 
+// boolVal reports whether the env var is set to a truthy value
+// (1/true/yes/on, case-insensitive).
+func boolVal(key string) bool {
+	switch strings.ToLower(get(key, "")) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // required returns the env var value or an error if unset/empty.
 func required(key string) (string, error) {
 	if v, ok := lookup(key); ok && v != "" {

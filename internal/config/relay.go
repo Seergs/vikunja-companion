@@ -4,10 +4,11 @@ import "errors"
 
 // Relay is the validated configuration for cmd/relay.
 type Relay struct {
-	ListenAddr string
-	APNS       APNS
-	DBPath     string
-	LogLevel   string
+	ListenAddr  string
+	APNS        APNS
+	APNSSandbox bool // hit the APNs sandbox gateway instead of production
+	DBPath      string
+	LogLevel    string
 }
 
 // LoadRelay reads and validates the relay configuration from the environment.
@@ -20,9 +21,10 @@ func LoadRelay() (*Relay, error) {
 	}
 
 	r := &Relay{
-		ListenAddr: get("RELAY_LISTEN_ADDR", ":8081"),
-		DBPath:     get("RELAY_DB_PATH", "/data/relay.db"),
-		LogLevel:   get("RELAY_LOG_LEVEL", "info"),
+		ListenAddr:  get("RELAY_LISTEN_ADDR", ":8081"),
+		APNSSandbox: boolVal("RELAY_APNS_SANDBOX"),
+		DBPath:      get("RELAY_DB_PATH", "/data/relay.db"),
+		LogLevel:    get("RELAY_LOG_LEVEL", "info"),
 	}
 
 	v, err := required("RELAY_APNS_KEY_PATH")

@@ -5,11 +5,12 @@ package main
 
 import (
 	"log/slog"
-	"net/http"
 	"os"
 
 	"github.com/seergs/vikunja-companion/internal/config"
 	"github.com/seergs/vikunja-companion/internal/httpx"
+	"github.com/seergs/vikunja-companion/internal/relay"
+	"github.com/seergs/vikunja-companion/internal/store"
 )
 
 // Version is injected at build time via -ldflags "-X main.Version=...".
@@ -43,15 +44,27 @@ func run() error {
 		"listen", cfg.ListenAddr,
 		"apns_topic", cfg.APNS.Topic,
 		"apns_key_id", cfg.APNS.KeyID,
+		"apns_sandbox", cfg.APNSSandbox,
 	)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("ok\n"))
-	})
-	// TODO(fase-2): POST /relay/v1/register, POST /relay/v1/push (per-token
-	// rate limited) -> APNs forwarder using the .p8 key.
+	db, err := store.OpenRelay(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	log.Info("database ready", "path", cfg.DBPath)
 
-	return httpx.Serve(cfg.ListenAddr, mux, log)
+	apns, err := relay.NewAPNS(relay.APNSConfig{
+		KeyPath: cfg.APNS.KeyPath,
+		KeyID:   cfg.APNS.KeyID,
+		TeamID:  cfg.APNS.TeamID,
+		Topic:   cfg.APNS.Topic,
+		Sandbox: cfg.APNSSandbox,
+	})
+	if err != nil {
+		return err
+	}
+
+	srv := relay.NewServer(db, apns, log, relay.ServerOptions{})
+	return httpx.Serve(cfg.ListenAddr, srv.Handler(), log)
 }
