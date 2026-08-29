@@ -1,6 +1,6 @@
 # Example: run the companion in front of an existing Vikunja instance.
-# The relay is NOT self-hosted — it is operated once by the project maintainer
-# (docs/COMPANION.md §2, §6.6). It is shown here only for local development.
+# The relay is NOT self-hosted — it is operated once by the project maintainer.
+# It is shown here only for local development.
 
 services:
   companion:
