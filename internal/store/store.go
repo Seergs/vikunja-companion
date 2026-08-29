@@ -17,6 +17,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -38,6 +40,10 @@ func Open(path string) (*DB, error) {
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
 	if path == ":memory:" {
 		dsn = "file::memory:?cache=shared&_pragma=foreign_keys(ON)"
+	} else if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return nil, fmt.Errorf("store: creating %s: %w", dir, err)
+		}
 	}
 
 	sqlDB, err := sql.Open("sqlite", dsn)
