@@ -118,28 +118,32 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
 
 ## Package notes
 
-- `internal/notify` is the reusable delivery seam — it must not import
-  `internal/vikunja` or learn anything Vikunja-specific. The event→notification
-  mapping lives in the `Source` (today `internal/webhook/build.go`); post-v1
-  sources (a `/api/v1/notifications` poller) plug in here without touching
-  sealing or delivery.
+- `internal/notify` is the reusable delivery seam (`Dispatcher.Dispatch(ctx,
+  devices, notifications)` -> dedupe -> seal -> relay push). It must not import
+  `internal/vikunja` or `internal/webhook` or learn anything Vikunja-specific.
+  The event->notification mapping lives in the caller (`internal/webhook/build.go`);
+  a post-v1 `/api/v1/notifications` poller builds its own `[]notify.Notification`
+  and calls `Dispatch` the same way.
 - `internal/webhook` handler identifies the sending user by trying each stored
   HMAC secret against the raw body — the webhook `target_url` is identical for
   every user, so there is no per-request user hint before verification.
-- Webhook setup is manual (see invariants). `GET /companion/v1/webhooks/setup`
-  generates + stores a per-user secret and returns it with the target URL and
-  the event list, all idempotent. `COMPANION_WEBHOOK_EVENTS` is the operator
-  ceiling for which events that endpoint advertises and which the handler
-  forwards; per-user event prefs just narrow that further, they are not pushed
-  back to Vikunja.
+- Webhook setup is manual (see invariants). `GET /companion/v1/webhook`
+  generates + stores a per-user secret (encrypted) and returns it with the
+  target URL, event list, and `last_delivery_at`, all idempotent — a repeat call
+  returns the same secret so the user's Vikunja config stays valid.
+  `COMPANION_WEBHOOK_EVENTS` is the operator ceiling for which events that
+  endpoint advertises and which the inbound handler forwards.
 - `main.Version` is `-ldflags "-X main.Version=..."` injected per binary.
 - `internal/companion` (not in section 7's list) assembles `cmd/companion`'s HTTP
   surface — `NewRouter` mounts the `/companion/v1/*` routes and sends everything
   else to `internal/proxy`. The identity cache lives here too. `internal/httpx`
   holds the logger + graceful-shutdown server loop shared by both `main`s.
-- `internal/store` runs plain `.sql` files embedded from `migrations/`, tracked
-  in a `schema_migrations` table, each in its own transaction. Add a migration,
-  never edit an applied one. `Open(":memory:")` works for tests.
+- `internal/store` runs plain `.sql` files embedded from `migrations/`
+  (companion, `Open`) or `migrations_relay/` (relay, `OpenRelay`), tracked in a
+  `schema_migrations` table, each in its own transaction. Add a migration, never
+  edit an applied one. `Open(":memory:")` works for tests. One `DB` type serves
+  both schemas; relay-only methods (`MintToken`, `ValidToken`) just aren't
+  called on a companion `DB`.
 - `config.LoadDotenv` (called first in both `main`s) loads `./.env` via
   `github.com/joho/godotenv` for local dev only — no-op when the file is absent,
   never overrides a real env var. Config stays env-first; nothing else reads the
