@@ -4,31 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**Fase 1 — the spine works.** `cmd/companion` boots, opens SQLite and runs
-embedded migrations (`internal/store`), refuses to start unless
-`VIKUNJA_UPSTREAM_URL` answers `GET /api/v1/info` with a version, then serves:
+**Fase 2 — push works end to end (unit-tested; not yet run against a live
+relay/APNs).** Both binaries build CGO-free and boot.
 
-- `GET /companion/v1/info` — the capability probe (`features: ["push"]`,
-  upstream version cached ~1 min).
-- everything else → `internal/proxy`, a verbatim reverse proxy to Vikunja
-  (`SetURL` + `SetXForwarded`, `FlushInterval: -1` for streaming, 502 on
-  upstream error).
+`cmd/companion`: opens SQLite + migrations, refuses to start unless
+`VIKUNJA_UPSTREAM_URL` answers `GET /api/v1/info`, registers a relay token on
+first boot (persisted in `meta`; non-fatal if the relay is down), then serves:
 
-`internal/vikunja` covers `GET /api/v1/info` and `GET /api/v1/user`.
-`internal/companion` holds the router + the `sha256(token) → user` identity
-cache — built and tested but not yet consumed by a route (devices/settings
-routes are Fase 2). All of the above is tested.
+- `GET /companion/v1/info` — capability probe (`features: ["push"]`).
+- `GET /companion/v1/webhook` — issues the target URL + a stable per-user HMAC
+  secret + events for the user to paste into Vikunja, plus `last_delivery_at`.
+- `POST /companion/v1/webhooks/vikunja` — inbound: identifies the user by trying
+  each stored secret, verifies the HMAC, parses the event, builds notifications
+  (`internal/webhook/build.go`), dispatches.
+- `POST` / `DELETE /companion/v1/devices` — register/unregister; last-device
+  removal deletes the user row (cascades the secret).
+- everything else → `internal/proxy`.
 
-Still doc-comment-only stubs: `internal/webhook`, `internal/notify`,
-`internal/crypto`, `internal/relay`.
+`cmd/relay`: `internal/store` (OpenRelay), `internal/relay` server —
+`POST /relay/v1/register`, `POST /relay/v1/push` (per-token rate limit,
+content-blind APNs envelope, `apns2`-backed sender, 410 on bad device token).
 
-- **Fase 2** (Vikunja side verified — see `docs/webhooks-verified.md`):
-  webhook HMAC verify + event parsing + `/companion/v1/webhooks/setup` and
-  `/companion/v1/webhooks/vikunja`, notify dispatch + dedupe, NaCl sealing +
-  token/secret-at-rest encryption, the relay client and server, and the
-  `/companion/v1/devices` + `/companion/v1/settings` routes.
+Delivery seam: `internal/notify` (dedupe -> `internal/crypto` sealed box ->
+`internal/relay` client). `internal/crypto` also does master-key AEAD for the
+stored Vikunja token and webhook secret.
 
-Not yet present: `LICENSE` (AGPLv3 text — drop it in).
+Not yet done: `/companion/v1/settings` (per-type toggles), the post-v1
+notifications poller and digest cron, and a live relay/APNs run. No `LICENSE`
+(AGPLv3 — drop it in).
 
 `docs/COMPANION.md` is the source of truth for *why* (sections 6 and 11 before
 touching `internal/webhook` or `internal/vikunja`);
