@@ -3,8 +3,11 @@ package companion
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/seergs/vikunja-companion/internal/crypto"
+	"github.com/seergs/vikunja-companion/internal/store"
 	"github.com/seergs/vikunja-companion/internal/vikunja"
 )
 
@@ -19,11 +22,17 @@ var v1Features = []string{"push"}
 // Options configures NewRouter.
 type Options struct {
 	Version       string // companion build version
+	PublicURL     string // companion's own public base URL
 	VikunjaURL    string // upstream URL, echoed in /companion/v1/info
 	VikunjaClient *vikunja.Client
 	Proxy         http.Handler // catch-all for everything not under /companion/
 	Logger        *slog.Logger
 	SeedVersion   string // upstream version from the startup probe
+
+	Store         *store.DB
+	Cipher        *crypto.Cipher
+	Dispatcher    dispatcher
+	WebhookEvents []string // operator ceiling (COMPANION_WEBHOOK_EVENTS)
 
 	IdentityTTL time.Duration // 0 -> default
 	InfoTTL     time.Duration // 0 -> default
@@ -32,8 +41,11 @@ type Options struct {
 // NewRouter returns the companion's top-level HTTP handler: /companion/v1/*
 // feature routes, with everything else proxied verbatim to Vikunja.
 func NewRouter(opts Options) http.Handler {
-	if opts.Proxy == nil {
+	switch {
+	case opts.Proxy == nil:
 		panic("companion: NewRouter requires a non-nil Proxy")
+	case opts.Store == nil || opts.Cipher == nil || opts.Dispatcher == nil:
+		panic("companion: NewRouter requires Store, Cipher, and Dispatcher")
 	}
 	if opts.IdentityTTL == 0 {
 		opts.IdentityTTL = defaultIdentityTTL
@@ -54,13 +66,27 @@ func NewRouter(opts Options) http.Handler {
 		fetchedAt:        time.Now(),
 	}
 
+	a := &api{
+		store:         opts.Store,
+		cipher:        opts.Cipher,
+		dispatch:      opts.Dispatcher,
+		identity:      NewIdentityCache(opts.VikunjaClient, opts.IdentityTTL),
+		webhookTarget: strings.TrimRight(opts.PublicURL, "/") + "/companion/v1/webhooks/vikunja",
+		webhookEvents: opts.WebhookEvents,
+		log:           opts.Logger,
+	}
+
 	// Routes under /companion/. Anything unmatched here 404s (the app reads a
 	// 404 as "no companion") — it must never fall through to the proxy.
-	companionMux := http.NewServeMux()
-	companionMux.HandleFunc("GET /companion/v1/info", info.ServeHTTP)
+	m := http.NewServeMux()
+	m.HandleFunc("GET /companion/v1/info", info.ServeHTTP)
+	m.HandleFunc("GET /companion/v1/webhook", a.getWebhook)
+	m.HandleFunc("POST /companion/v1/webhooks/vikunja", a.inboundWebhook)
+	m.HandleFunc("POST /companion/v1/devices", a.registerDevice)
+	m.HandleFunc("DELETE /companion/v1/devices", a.unregisterDevice)
 
 	root := http.NewServeMux()
-	root.Handle("/companion/", companionMux)
+	root.Handle("/companion/", m)
 	root.HandleFunc("GET /healthz", healthz)
 	root.Handle("/", opts.Proxy)
 	return root
