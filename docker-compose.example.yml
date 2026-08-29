@@ -1,0 +1,39 @@
+# Example: run the companion in front of an existing Vikunja instance.
+# The relay is NOT self-hosted — it is operated once by the project maintainer
+# (docs/COMPANION.md §2, §6.6). It is shown here only for local development.
+
+services:
+  companion:
+    image: ghcr.io/seergs/vikunja-companion:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      COMPANION_PUBLIC_URL: https://companion.example.com
+      VIKUNJA_UPSTREAM_URL: http://vikunja:3456
+      COMPANION_MASTER_KEY: ${COMPANION_MASTER_KEY:?set COMPANION_MASTER_KEY}
+      COMPANION_DB_PATH: /data/companion.db
+      COMPANION_LOG_LEVEL: info
+    volumes:
+      - companion-data:/data
+
+  # Local-dev only. In production this is the maintainer's shared instance.
+  relay:
+    image: ghcr.io/seergs/vikunja-companion:latest
+    entrypoint: ["/relay"]
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      RELAY_APNS_KEY_PATH: /keys/AuthKey.p8
+      RELAY_APNS_KEY_ID: ${RELAY_APNS_KEY_ID:?}
+      RELAY_APNS_TEAM_ID: ${RELAY_APNS_TEAM_ID:?}
+      RELAY_APNS_TOPIC: ${RELAY_APNS_TOPIC:?}
+      RELAY_DB_PATH: /data/relay.db
+    volumes:
+      - relay-data:/data
+      - ./keys:/keys:ro
+
+volumes:
+  companion-data:
+  relay-data:
