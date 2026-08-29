@@ -4,24 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**Fase 0 scaffold.** The repo compiles and both binaries run: they load and
-validate their env config (`internal/config`), set up JSON logging, and serve
-`/healthz` with graceful shutdown. `internal/config` is real and tested;
-`internal/httpx` holds the shared server loop. Every other `internal/*` package
-from `docs/COMPANION.md` §7 exists as a **doc-comment-only stub** with a
-`TODO(fase-1)` / `TODO(fase-2)` marker — no proxy, no store, no vikunja client,
-no webhook/notify/crypto/relay logic yet.
+**Fase 1 — the spine works.** `cmd/companion` boots, opens SQLite and runs
+embedded migrations (`internal/store`), refuses to start unless
+`VIKUNJA_UPSTREAM_URL` answers `GET /api/v1/info` with a version (§8), then
+serves:
 
-Roadmap:
+- `GET /companion/v1/info` — the §5 capability probe (`features: ["push"]`,
+  upstream version cached ~1 min).
+- everything else → `internal/proxy`, a verbatim reverse proxy to Vikunja
+  (`SetURL` + `SetXForwarded`, `FlushInterval: -1` for streaming, 502 on
+  upstream error).
 
-- **Fase 1** (no live Vikunja needed): `internal/proxy` (verbatim `/api/v1/*`),
-  `internal/store` (SQLite schema + migrations), `internal/vikunja`
-  (`info`, `user`), `/companion/v1/info`, token→user identity cache, upstream
-  reachability check on boot.
+`internal/vikunja` covers `GET /api/v1/info` and `GET /api/v1/user`.
+`internal/companion` holds the router + the `sha256(token) → user` identity
+cache (§3) — the cache is built and tested but not yet consumed by a route
+(devices/settings routes are Fase 2). All of the above is tested.
+
+Still doc-comment-only stubs: `internal/webhook`, `internal/notify`,
+`internal/crypto`, `internal/relay`.
+
 - **Fase 2** (blocked on the §11 checklist against a live `/api/v1/docs`):
-  `internal/webhook`, `internal/notify`, `internal/crypto`, `internal/relay`.
+  webhook verify/parse/reconcile, notify dispatch + dedupe, NaCl sealing +
+  token-at-rest encryption, the relay client and server, and the
+  `/companion/v1/devices` + `/companion/v1/settings` routes.
 
-Not yet present: `LICENSE` (AGPLv3 text — drop it in), `go.sum` (no deps yet).
+Not yet present: `LICENSE` (AGPLv3 text — drop it in).
 
 `docs/COMPANION.md` is the source of truth for *why*. Read §6 (push) and §11
 (verification checklist) before touching `internal/webhook` or
@@ -117,3 +124,10 @@ go run ./cmd/companion    # reads env; see .env.example
   (`COMPANION_WEBHOOK_EVENTS`). Reconcile runs on device (de)registration, on
   settings change, and on an hourly timer.
 - `main.Version` is `-ldflags "-X main.Version=..."` injected per binary.
+- `internal/companion` (not in §7's list) assembles `cmd/companion`'s HTTP
+  surface — `NewRouter` mounts the `/companion/v1/*` routes and sends everything
+  else to `internal/proxy`. The identity cache lives here too. `internal/httpx`
+  holds the logger + graceful-shutdown server loop shared by both `main`s.
+- `internal/store` runs plain `.sql` files embedded from `migrations/`, tracked
+  in a `schema_migrations` table, each in its own transaction. Add a migration,
+  never edit an applied one. `Open(":memory:")` works for tests.
