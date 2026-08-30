@@ -16,8 +16,9 @@ const (
 	defaultInfoTTL     = 1 * time.Minute
 )
 
-// v1Features is the capability list advertised by /companion/v1/info.
-var v1Features = []string{"push"}
+// v1Features is the capability list advertised by /companion/v1/info. "digest"
+// gates the morning-briefing settings UI in the app.
+var v1Features = []string{"push", "digest"}
 
 // Options configures NewRouter.
 type Options struct {
@@ -70,6 +71,7 @@ func NewRouter(opts Options) http.Handler {
 		store:         opts.Store,
 		cipher:        opts.Cipher,
 		dispatch:      opts.Dispatcher,
+		userSettings:  opts.VikunjaClient,
 		identity:      NewIdentityCache(opts.VikunjaClient, opts.IdentityTTL),
 		webhookTarget: strings.TrimRight(opts.PublicURL, "/") + "/companion/v1/webhooks/vikunja",
 		webhookEvents: opts.WebhookEvents,
@@ -84,6 +86,8 @@ func NewRouter(opts Options) http.Handler {
 	m.HandleFunc("POST /companion/v1/webhooks/vikunja", a.inboundWebhook)
 	m.HandleFunc("POST /companion/v1/devices", a.registerDevice)
 	m.HandleFunc("DELETE /companion/v1/devices", a.unregisterDevice)
+	m.HandleFunc("GET /companion/v1/settings", a.getSettings)
+	m.HandleFunc("PUT /companion/v1/settings", a.putSettings)
 
 	root := http.NewServeMux()
 	root.Handle("/companion/", m)

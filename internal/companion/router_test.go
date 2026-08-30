@@ -63,7 +63,7 @@ func newTestEnv(t *testing.T, proxy http.Handler) *testEnv {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			w.Write([]byte(`{"id":1,"username":"tester"}`))
+			w.Write([]byte(`{"id":1,"username":"tester","settings":{"timezone":"America/New_York"}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -128,7 +128,7 @@ func TestRouterInfo(t *testing.T) {
 	if body.Vikunja.URL != "https://vikunja.example.com" || body.Vikunja.Version != "v2.5.0" {
 		t.Errorf("vikunja = %+v", body.Vikunja)
 	}
-	if len(body.Features) != 1 || body.Features[0] != "push" {
+	if len(body.Features) != 2 || body.Features[0] != "push" || body.Features[1] != "digest" {
 		t.Errorf("features = %v", body.Features)
 	}
 }

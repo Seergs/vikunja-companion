@@ -18,12 +18,19 @@ type dispatcher interface {
 	Dispatch(ctx context.Context, devices []notify.Device, notifications []notify.Notification) error
 }
 
+// userSettingsFetcher reads a caller's Vikunja settings (the timezone the
+// digest send time is interpreted in). Satisfied by *vikunja.Client.
+type userSettingsFetcher interface {
+	UserSettings(ctx context.Context, token string) (*vikunja.UserSettings, error)
+}
+
 // api holds the dependencies for the authenticated /companion/v1/* routes and
 // the inbound webhook route.
 type api struct {
 	store         *store.DB
 	cipher        *crypto.Cipher
 	dispatch      dispatcher
+	userSettings  userSettingsFetcher
 	identity      *IdentityCache
 	webhookTarget string   // {PublicURL}/companion/v1/webhooks/vikunja
 	webhookEvents []string // operator ceiling (COMPANION_WEBHOOK_EVENTS)

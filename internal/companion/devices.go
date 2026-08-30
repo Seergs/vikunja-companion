@@ -48,6 +48,8 @@ func (a *api) registerDevice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	a.cacheTimezone(ctx, id.UserID, bearerToken(r))
+
 	deviceID, err := a.store.UpsertDevice(ctx, store.Device{
 		UserID:     id.UserID,
 		APNsToken:  body.APNsToken,
