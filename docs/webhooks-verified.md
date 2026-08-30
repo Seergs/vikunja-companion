@@ -263,6 +263,14 @@ webhook delivery listener now has per-delivery retry via watermill middleware
 Returns `v1.UserWithSettings` — includes `id`, `username`, `name`, `email`, plus
 `settings`. Our `vikunja.User{ID, Username}` subset is correct.
 
+**Token permission requirement.** In the `/api/v1/routes` token catalog this
+route is group **`other`**, permission **`user`**. An API token created without
+the `other` group cannot call it, and Vikunja answers `401 code 11` — which the
+companion surfaces as `{"error":"invalid or missing token"}` on every
+authenticated `/companion/v1/*` route, since identity resolution depends on this
+call. The app's "connect" flow must instruct the user to grant the `other`
+group (or all permissions) when creating the token.
+
 ---
 
 ## Left to check — needs a JWT (API token is not enough, see blocker)

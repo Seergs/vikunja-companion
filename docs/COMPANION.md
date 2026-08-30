@@ -94,7 +94,9 @@ The companion has **no accounts, no login, no registration** of its own.
   only models API-token auth today). Every proxied request already carries it.
 - To identify a caller on a `/companion/v1/*` route, the companion takes the
   same `Authorization: Bearer <token>` and calls `GET /api/v1/user` upstream,
-  then caches `sha256(token) → {user_id, ttl}` (a few minutes).
+  then caches `sha256(token) → {user_id, ttl}` (a few minutes). That route needs
+  the token's `other` permission group (see `webhooks-verified.md`) — the app's
+  connect flow must tell the user to grant it.
 - "User" = whatever Vikunja says that token belongs to. Multi-user falls out
   for free: the `devices` table has a `user_id` column and the crons loop over
   users. The companion never manages users — it just doesn't assume there's
