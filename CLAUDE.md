@@ -19,7 +19,16 @@ first boot (persisted in `meta`; non-fatal if the relay is down), then serves:
   (`internal/webhook/build.go`), dispatches.
 - `POST` / `DELETE /companion/v1/devices` — register/unregister; last-device
   removal deletes the user row (cascades the secret).
+- `GET` / `PUT /companion/v1/settings` — per-user notification prefs
+  (`{ digest: { enabled, time }, timezone }`), stored in `user_settings`.
 - everything else → `internal/proxy`.
+
+A 5-minute cron (`internal/digest`, started from `main`) sends the **morning
+briefing**: per user with a device, at their local send time (default 08:00,
+2h window), fetch tasks due through today via `GET /api/v1/tasks`, deliver
+one "N tasks for today · M urgent" push (`priority >= 4` = urgent; zero tasks =
+no push), idempotent via a `digest:<user>:<date>` key in `notifications_sent`.
+`cmd/companion` embeds `time/tzdata` for this (CGO-free distroless).
 
 `cmd/relay`: `internal/store` (OpenRelay), `internal/relay` server —
 `POST /relay/v1/register`, `POST /relay/v1/push` (per-token rate limit,
@@ -29,8 +38,9 @@ Delivery seam: `internal/notify` (dedupe -> `internal/crypto` sealed box ->
 `internal/relay` client). `internal/crypto` also does master-key AEAD for the
 stored Vikunja token and webhook secret.
 
-Not yet done: `/companion/v1/settings` (per-type toggles), the post-v1
-notifications poller and digest cron, and a live relay/APNs run. No `LICENSE`
+Not yet done: per-type push toggles in `/companion/v1/settings`, the post-v1
+notifications poller, a live relay/APNs run, and a live run of the digest cron
+against a real Vikunja (`GET /api/v1/tasks` filter unverified). No `LICENSE`
 (AGPLv3 — drop it in).
 
 `docs/COMPANION.md` is the source of truth for *why* (sections 6 and 11 before
@@ -124,6 +134,13 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
   The event->notification mapping lives in the caller (`internal/webhook/build.go`);
   a post-v1 `/api/v1/notifications` poller builds its own `[]notify.Notification`
   and calls `Dispatch` the same way.
+- `internal/digest` is the second `notify` caller (after `internal/webhook`): a
+  cron, not a webhook. `Build` maps tasks-due-today to the one briefing
+  notification; `Runner.Run(ctx)` is the 5-min loop `main` starts in a
+  goroutine. It may import `internal/vikunja` (like `webhook`); `notify` may
+  not. Idempotency is the `Runner`'s own `digest:<user>:<date>` MarkSent guard,
+  not the dispatcher's dedupe. `ParseHHMM` is shared with the settings handler's
+  input validation.
 - `internal/webhook` handler identifies the sending user by trying each stored
   HMAC secret against the raw body — the webhook `target_url` is identical for
   every user, so there is no per-request user hint before verification.

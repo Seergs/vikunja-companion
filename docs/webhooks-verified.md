@@ -81,6 +81,33 @@ Options that were considered and rejected:
 - Still unchecked (needs a JWT): the exact `.../webhooks/events` array, one real
   delivery end-to-end, the non-user-directed-event `400`.
 
+### Morning digest — `GET /api/v1/tasks`
+
+The digest cron (`internal/vikunja.TasksDueToday`) uses the modern `filter`
+string syntax (Vikunja v2.x; the older `filter_by`/`filter_value` arrays are not
+used):
+
+```
+filter              = done = false && due_date > 0001-01-01 && due_date < now+1d/d
+filter_timezone     = <user's IANA tz>   (resolves "now")
+filter_include_nulls = false             (drop tasks with no due date)
+per_page            = 50   (max_items_per_page)   page = 1..N
+```
+
+Gotchas found the hard way:
+- The endpoint is `/api/v1/tasks`, **not** `/api/v1/tasks/all` — the `/all`
+  route was dropped in Vikunja v2.x and now 400s with `code 2004` regardless of
+  params.
+- Date values are **unquoted date-math**. Quoted RFC3339 (`'2026-08-29T…Z'`)
+  → `400 {"code":2004,"message":"Invalid model provided"}`.
+- `now+1d/d` = "now, +1 day, rounded to day start" = start of tomorrow (the
+  documented `now-1M/M` idiom). Chained `now/d+1d` is undocumented.
+- `filter_include_nulls` default is inconsistent across versions — set it
+  explicitly. `due_date > 0001-01-01` additionally drops the zero-date rows an
+  unset due date can surface as.
+
+Priority field is `priority` (int, `4` = Urgent, `5` = DO NOW).
+
 ---
 
 ## Instance prerequisites (from `GET /api/v1/info`)

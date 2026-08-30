@@ -359,6 +359,43 @@ Tracked here so they're not a surprise:
   → Webhooks, then confirm a delivery arrived. Also surface the "no signal in N
   days" warning from `/companion/v1/info`'s `last_delivery_at`.
 - Keychain: X25519 private key in the shared access group.
+- A **Morning briefing** settings screen (visible only when `/companion/v1/info`
+  `features` includes `"digest"`): an enable toggle and a time picker, saved via
+  `PUT /companion/v1/settings`.
+
+### 6.8 Morning briefing (daily digest)
+
+A forward-looking counterpart to the retrospective overdue notification: one
+push each morning — **"8 tasks for today · 1 urgent"** — tappable to the Today
+screen. Built, unit-tested; shares the `notify` delivery seam with the webhook
+path.
+
+**Pull, not a webhook.** Vikunja emits no "your day" event, so a cron in
+`cmd/companion` (`internal/digest`) drives it:
+
+- Wakes every 5 minutes. For each user with a registered device it computes the
+  local wall clock from their cached Vikunja `settings.timezone` and checks
+  whether their send time (default **08:00**, per-user) has passed within the
+  last **2 hours** (the window keeps a companion that was down all morning from
+  firing a stale briefing at 15:00).
+- In the window and not already sent today: fetch undone tasks due through end
+  of the local day via `GET /api/v1/tasks`, count them, and deliver one
+  `notify.Notification` (`Deeplink: "today"`). **Urgent** = Vikunja
+  `priority >= 4`. **Zero tasks → no push.**
+- Idempotent per user per day through a `digest:<user_id>:<local_date>` key in
+  `notifications_sent`; restarts and the exact tick cadence do not matter.
+- Uses the stored (encrypted) Vikunja API token — the same one the webhook
+  setup / device registration already persists. A token Vikunja rejects just
+  logs and skips that user.
+
+**Config:** `COMPANION_DIGEST_ENABLED` (default true) is a fleet-wide kill
+switch only. The per-user enable flag, send time, and cached timezone live in
+the `user_settings` table and are set from the app via
+`GET`/`PUT /companion/v1/settings` (`{ digest: { enabled, time }, timezone }`;
+`time` is validated as 24-hour `HH:MM`).
+
+CGO-free builds embed the IANA tz database (`import _ "time/tzdata"` in
+`cmd/companion`) — distroless has no system zoneinfo.
 
 ---
 
@@ -439,11 +476,9 @@ these slot in without touching delivery/encryption:
   was down (Vikunja does not retry webhooks).
 - **Optional project-level webhook auto-registration** for users who want
   real-time comment/assignment push instead of poll latency. Off by default.
-- **Daily digest.** Companion cron at a user-configured time (default 08:00,
-  their tz) fetches tasks and sends one *forward-looking* push — "8 tasks
-  today, 1 urgent" — bucketed with the **same rule as
-  `VikunjaCore.TodayDigest`** so app, widget and digest agree. Complements
-  Vikunja's retrospective overdue notification. Tappable → Today screen.
+- **Daily digest.** Built — see 6.8. Bucket rule (undone, `due_date <= end of
+  local day`, includes overdue) should track `VikunjaCore.TodayDigest` so app,
+  widget and digest agree.
 - **AI assistant (opt-in).** Provider key at instance level (or BYO per user).
   Generates *suggestions* the user accepts/rejects — never auto-applies:
   suggested labels, better titles/descriptions, "this task is thin, add
