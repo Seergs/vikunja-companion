@@ -33,8 +33,13 @@ type api struct {
 // resolve authenticates the request and returns the caller. On failure it has
 // already written the response and returns ok=false.
 func (a *api) resolve(w http.ResponseWriter, r *http.Request) (Identity, bool) {
-	id, err := a.identity.Resolve(r.Context(), bearerToken(r))
+	token := bearerToken(r)
+	id, err := a.identity.Resolve(r.Context(), token)
 	if err != nil {
+		a.log.Warn("auth failed for "+r.URL.Path,
+			"has_bearer", token != "",
+			"upstream_401", vikunja.IsUnauthorized(err),
+			"err", err)
 		writeAuthError(w, err)
 		return Identity{}, false
 	}
