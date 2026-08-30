@@ -10,9 +10,14 @@ import (
 	"os"
 	"time"
 
+	// Embed the IANA timezone database: CGO-free distroless builds have no
+	// system zoneinfo, so time.LoadLocation needs this for the digest cron.
+	_ "time/tzdata"
+
 	"github.com/seergs/vikunja-companion/internal/companion"
 	"github.com/seergs/vikunja-companion/internal/config"
 	"github.com/seergs/vikunja-companion/internal/crypto"
+	"github.com/seergs/vikunja-companion/internal/digest"
 	"github.com/seergs/vikunja-companion/internal/httpx"
 	"github.com/seergs/vikunja-companion/internal/notify"
 	"github.com/seergs/vikunja-companion/internal/proxy"
@@ -88,6 +93,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	ctx, stop := httpx.SignalContext()
+	defer stop()
+
+	digestRunner := digest.NewRunner(db, vk, cipher, dispatcher, time.Now, cfg.DigestEnabled, log)
+	go digestRunner.Run(ctx)
 
 	handler := companion.NewRouter(companion.Options{
 		Version:       Version,

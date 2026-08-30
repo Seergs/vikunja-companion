@@ -38,6 +38,7 @@ type Companion struct {
 	RelayToken    string
 	WebhookEvents []string
 	APNS          *APNS
+	DigestEnabled bool
 	LogLevel      string
 }
 
@@ -52,10 +53,11 @@ func LoadCompanion() (*Companion, error) {
 	}
 
 	c := &Companion{
-		ListenAddr: get("COMPANION_LISTEN_ADDR", ":8080"),
-		DBPath:     get("COMPANION_DB_PATH", "/data/companion.db"),
-		RelayToken: get("COMPANION_RELAY_TOKEN", ""),
-		LogLevel:   get("COMPANION_LOG_LEVEL", "info"),
+		ListenAddr:    get("COMPANION_LISTEN_ADDR", ":8080"),
+		DBPath:        get("COMPANION_DB_PATH", "/data/companion.db"),
+		RelayToken:    get("COMPANION_RELAY_TOKEN", ""),
+		DigestEnabled: boolDefault("COMPANION_DIGEST_ENABLED", true),
+		LogLevel:      get("COMPANION_LOG_LEVEL", "info"),
 	}
 
 	if raw, err := required("COMPANION_PUBLIC_URL"); err != nil {

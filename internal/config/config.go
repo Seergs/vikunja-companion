@@ -36,6 +36,21 @@ func boolVal(key string) bool {
 	}
 }
 
+// boolDefault parses a truthy value (1/true/yes/on, case-insensitive),
+// returning def when the var is unset or empty.
+func boolDefault(key string, def bool) bool {
+	v, ok := lookup(key)
+	if !ok || v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // required returns the env var value or an error if unset/empty.
 func required(key string) (string, error) {
 	if v, ok := lookup(key); ok && v != "" {

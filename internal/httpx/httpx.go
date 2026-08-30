@@ -23,6 +23,12 @@ func Logger(level string) *slog.Logger {
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
 }
 
+// SignalContext returns a context cancelled on SIGINT/SIGTERM, for background
+// workers that need to stop alongside Serve.
+func SignalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+}
+
 // Serve runs an http.Server with handler h on addr until SIGINT/SIGTERM, then
 // shuts down gracefully within a 10s deadline.
 func Serve(addr string, h http.Handler, log *slog.Logger) error {
