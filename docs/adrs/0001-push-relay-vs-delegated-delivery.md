@@ -146,6 +146,6 @@ With that gone, the token follows the same env-config path:
   operator env config, not app settings.
 - `docs/COMPANION.md` is updated to describe delegated delivery as the design,
   not a footnote.
-- Interim state: the `Sender` is a stub that logs. The ingest, dedupe, digest,
-  and settings paths are already in place; the env-backed Apprise `Sender` is
-  the next unit of work.
+- The `notify.Apprise` sender (POST to `apprise-api`) is implemented and wired;
+  with `COMPANION_APPRISE_API_URL` unset the companion logs instead. It has not
+  yet been run against a live apprise-api.

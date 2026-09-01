@@ -322,9 +322,14 @@ COMPANION_APPRISE_TOKEN      # bearer for the apprise-api endpoint; optional
 - `COMPANION_APPRISE_API_URL` is either the persistent-config form
   `.../notify/{key}` (service URLs saved in apprise-api under `{key}`) or the
   stateless form `.../notify` (then set `COMPANION_APPRISE_URLS`).
-- The companion POSTs `{"title", "body", "type"}` (`type` = `warning` for
-  overdue, `info` otherwise; `"urls"` added when set). With
-  `COMPANION_APPRISE_API_URL` unset it logs instead — the same as today's stub.
+- The companion POSTs JSON `{title, body, type, format: "text", urls?}`:
+  `type` is `warning` for overdue events, `info` otherwise (from
+  `notify.Notification.Level`); `urls` is included only when
+  `COMPANION_APPRISE_URLS` is set; the relative deep link (`task/12`, `today`)
+  is appended as the last line of `body`. `COMPANION_APPRISE_TOKEN`, if set, goes
+  out as `Authorization: Bearer`. A non-2xx response is an error (logged; the
+  dispatcher moves on). With `COMPANION_APPRISE_API_URL` unset the notification
+  is logged instead of sent.
 
 **Fleet-wide, not per user.** A companion serving one person (the normal case)
 is unaffected. On a shared companion every user's notifications go to the same
@@ -339,10 +344,8 @@ A **generic JSON webhook** kind (POST straight to a Discord/Slack/homemade URL,
 skipping apprise-api) is an easy follow-up if anyone wants to avoid the extra
 container — same `Sender` interface — but it is not in v1.
 
-> Delivery is **not implemented yet** — the `Sender` is currently a stub that
-> logs each notification. The webhook-ingest, dedupe, digest, and settings paths
-> are in place; the Apprise `Sender` reading the env config above is the next
-> step.
+Implemented in `internal/notify` (`Apprise`), wired in `cmd/companion`. Not yet
+exercised against a live apprise-api.
 
 ### 6.6 Why delegate instead of running a relay
 
@@ -496,8 +499,8 @@ The `notify` package keeps the event→notification mapping in its callers and t
 outbound formatting behind the `Sender` interface, so these slot in without
 touching delivery:
 
-- **Apprise `Sender`** — the immediate next step; makes v1 actually deliver
-  (see 6.5).
+- **A live apprise-api run** — the `Apprise` sender (6.5) is built and wired but
+  has only been unit-tested.
 - **Per-user routing** — move both the Vikunja token (for the digest) and the
   Apprise config out of env and into `user_settings`, encrypted at rest, set
   from the app. Makes the digest and delivery multi-user. Adds a

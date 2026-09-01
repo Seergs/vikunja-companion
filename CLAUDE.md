@@ -34,15 +34,17 @@ notification (`priority >= 4` = urgent; zero tasks = nothing), idempotent via a
 the webhook path stays multi-user (HMAC-identified).
 
 Delivery seam: `internal/notify` — `Dispatcher.Dispatch(ctx, userID,
-notifications)` → dedupe → `Sender.Send`. **The `Sender` is a stub in
-`cmd/companion` that only logs.** The only secret in the DB is the webhook HMAC
-secret; `internal/crypto` does master-key AEAD for it. No Vikunja token is ever
-stored (per-request in the header, digest token in env).
+notifications)` → dedupe → `Sender.Send`. The `Sender` is `notify.Apprise`
+(POSTs `{title, body, type}` to `COMPANION_APPRISE_API_URL`, fleet-wide); when
+that env is unset `cmd/companion` falls back to a `logSender`. The only secret
+in the DB is the webhook HMAC secret; `internal/crypto` does master-key AEAD for
+it. No Vikunja token is ever stored (per-request in the header, digest token in
+env).
 
-Not yet done: the Apprise `Sender` (reads `COMPANION_APPRISE_*` env — fleet-wide
-for v1), per-type toggles, per-user token/delivery routing (+ teardown endpoint,
-notifications poller), a live digest run against a real Vikunja
-(`GET /api/v1/tasks` filter unverified). No `LICENSE` (AGPLv3 — drop it in).
+Not yet done: per-type toggles, per-user token/delivery routing (+ teardown
+endpoint, notifications poller), a live apprise-api run, a live digest run
+against a real Vikunja (`GET /api/v1/tasks` filter unverified). No `LICENSE`
+(AGPLv3 — drop it in).
 
 `docs/COMPANION.md` is the source of truth for *why* (sections 6 and 11 before
 touching `internal/webhook` or `internal/vikunja`); `docs/adrs/` holds decision
@@ -137,8 +139,9 @@ go run ./cmd/companion    # auto-loads ./.env if present (godotenv); see .env.ex
   userID, notifications)` -> dedupe -> `Sender.Send`). It must not import
   `internal/vikunja` or `internal/webhook` or learn anything Vikunja-specific.
   The event->notification mapping lives in the caller (`internal/webhook/build.go`,
-  `internal/digest`); channel formatting lives behind `Sender`. The `Sender`
-  impl is TODO — `cmd/companion` currently wires a stub that only logs. A post-v1
+  `internal/digest`); outbound formatting lives behind `Sender`. The one impl is
+  `notify.Apprise` (`apprise.go`); `cmd/companion` uses it when
+  `COMPANION_APPRISE_API_URL` is set, else a log-only fallback. A post-v1
   `/api/v1/notifications` poller builds its own `[]notify.Notification` and calls
   `Dispatch` the same way.
 - `internal/digest` is the second `notify` caller (after `internal/webhook`): a
