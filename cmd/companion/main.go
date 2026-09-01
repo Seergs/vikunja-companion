@@ -80,9 +80,14 @@ func run() error {
 	}
 	log.Info("upstream reachable", "url", cfg.UpstreamURL, "vikunja_version", upstreamVersion)
 
-	// TODO: the Apprise Sender is not built yet. Until it lands, notifications
-	// are logged instead of delivered.
-	dispatcher := notify.New(db, logSender{log}, log)
+	var sender notify.Sender = logSender{log}
+	if cfg.Apprise.Enabled() {
+		sender = notify.NewApprise(cfg.Apprise.APIURL, cfg.Apprise.URLs, cfg.Apprise.Token, nil)
+		log.Info("apprise delivery enabled", "endpoint", cfg.Apprise.APIURL)
+	} else {
+		log.Warn("COMPANION_APPRISE_API_URL not set — notifications will be logged, not delivered")
+	}
+	dispatcher := notify.New(db, sender, log)
 
 	rp, err := proxy.New(cfg.UpstreamURL, log)
 	if err != nil {
@@ -150,12 +155,12 @@ func resolveDigestUser(vk *vikunja.Client, token string, log *slog.Logger) int64
 	return u.ID
 }
 
-// logSender is a placeholder notify.Sender: it logs each notification instead
-// of delivering it. It is replaced by the Apprise sender once that lands.
+// logSender is the fallback notify.Sender used when COMPANION_APPRISE_API_URL is
+// unset: it logs each notification instead of delivering it.
 type logSender struct{ log *slog.Logger }
 
 func (s logSender) Send(_ context.Context, userID int64, n notify.Notification) error {
-	s.log.Warn("notification not delivered — no Apprise sender is implemented yet",
+	s.log.Warn("notification not delivered — COMPANION_APPRISE_API_URL is not set",
 		"user", userID, "title", n.Title, "body", n.Body)
 	return nil
 }
