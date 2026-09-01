@@ -91,6 +91,7 @@ func (r *Runner) process(ctx context.Context) error {
 		return fmt.Errorf("settings: %w", err)
 	}
 	if !s.DigestEnabled {
+		r.log.Debug("digest: disabled for user", "user", r.userID)
 		return nil
 	}
 
@@ -106,6 +107,9 @@ func (r *Runner) process(ctx context.Context) error {
 	}
 	target := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
 	if now.Before(target) || now.After(target.Add(window)) {
+		r.log.Debug("digest: outside send window",
+			"user", r.userID, "tz", tz, "now", now.Format("15:04"),
+			"window", target.Format("15:04")+"–"+target.Add(window).Format("15:04"))
 		return nil
 	}
 
@@ -114,6 +118,7 @@ func (r *Runner) process(ctx context.Context) error {
 	case err != nil:
 		return err
 	case sent:
+		r.log.Debug("digest: already sent today", "user", r.userID, "key", key)
 		return nil
 	}
 
@@ -128,6 +133,8 @@ func (r *Runner) process(ctx context.Context) error {
 			return fmt.Errorf("dispatch: %w", err)
 		}
 		r.log.Info("digest sent", "user", r.userID, "tasks", len(tasks))
+	} else {
+		r.log.Debug("digest: nothing due today, nothing sent", "user", r.userID)
 	}
 
 	// Record that today's digest was evaluated so later ticks in the window
