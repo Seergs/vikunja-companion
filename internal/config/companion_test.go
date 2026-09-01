@@ -41,6 +41,39 @@ func TestLoadCompanionDefaults(t *testing.T) {
 	if len(c.WebhookEvents) != len(KnownWebhookEvents) {
 		t.Errorf("WebhookEvents = %v", c.WebhookEvents)
 	}
+	if c.Apprise.Enabled() {
+		t.Errorf("Apprise should be disabled by default, got %+v", c.Apprise)
+	}
+}
+
+func TestLoadCompanionApprise(t *testing.T) {
+	setCompanionEnv(t, map[string]string{
+		"COMPANION_APPRISE_API_URL": "https://apprise.example.com/notify/vikunja/",
+		"COMPANION_APPRISE_URLS":    "ntfy://ntfy.sh/topic",
+		"COMPANION_APPRISE_TOKEN":   "sekret",
+	})
+
+	c, err := LoadCompanion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Apprise.Enabled() {
+		t.Fatal("Apprise should be enabled")
+	}
+	if c.Apprise.APIURL != "https://apprise.example.com/notify/vikunja" {
+		t.Errorf("APIURL = %q (trailing slash not stripped?)", c.Apprise.APIURL)
+	}
+	if c.Apprise.URLs != "ntfy://ntfy.sh/topic" || c.Apprise.Token != "sekret" {
+		t.Errorf("Apprise = %+v", c.Apprise)
+	}
+}
+
+func TestLoadCompanionAppriseBadURL(t *testing.T) {
+	setCompanionEnv(t, map[string]string{"COMPANION_APPRISE_API_URL": "not-a-url"})
+
+	if _, err := LoadCompanion(); err == nil || !strings.Contains(err.Error(), "COMPANION_APPRISE_API_URL") {
+		t.Fatalf("err = %v, want COMPANION_APPRISE_API_URL complaint", err)
+	}
 }
 
 func TestLoadCompanionMissingRequired(t *testing.T) {

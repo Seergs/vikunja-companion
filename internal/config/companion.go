@@ -23,9 +23,21 @@ type Companion struct {
 	MasterKey     []byte
 	WebhookEvents []string
 	VikunjaToken  string // COMPANION_VIKUNJA_TOKEN; the digest cron acts as this user. Empty -> digest off.
+	Apprise       Apprise
 	DigestEnabled bool
 	LogLevel      string
 }
+
+// Apprise is the notification-delivery target: an apprise-api endpoint the
+// operator runs. Empty APIURL -> notifications are logged, not delivered.
+type Apprise struct {
+	APIURL string // COMPANION_APPRISE_API_URL, e.g. https://apprise.example/notify or .../notify/{key}
+	URLs   string // COMPANION_APPRISE_URLS, comma-separated Apprise service URLs (stateless form)
+	Token  string // COMPANION_APPRISE_TOKEN, bearer for the endpoint
+}
+
+// Enabled reports whether delivery is configured.
+func (a Apprise) Enabled() bool { return a.APIURL != "" }
 
 // LoadCompanion reads and validates the companion configuration from the
 // environment.
@@ -73,6 +85,18 @@ func LoadCompanion() (*Companion, error) {
 		push(err)
 	} else {
 		c.WebhookEvents = events
+	}
+
+	c.Apprise = Apprise{
+		URLs:  get("COMPANION_APPRISE_URLS", ""),
+		Token: get("COMPANION_APPRISE_TOKEN", ""),
+	}
+	if raw := get("COMPANION_APPRISE_API_URL", ""); raw != "" {
+		if v, err := parseHTTPURL("COMPANION_APPRISE_API_URL", raw); err != nil {
+			push(err)
+		} else {
+			c.Apprise.APIURL = v
+		}
 	}
 
 	if len(errs) > 0 {
