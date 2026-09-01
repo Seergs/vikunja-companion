@@ -1,6 +1,9 @@
 # Example: run the companion in front of an existing Vikunja instance.
-# The relay is NOT self-hosted — it is operated once by the project maintainer.
-# It is shown here only for local development.
+#
+# The companion is optional. It is a transparent reverse proxy to Vikunja that
+# also serves its own features under /companion/v1/*. Notification delivery is
+# delegated to Apprise (the user runs apprise-api) — the companion has no push
+# infrastructure of its own.
 
 services:
   companion:
@@ -17,23 +20,5 @@ services:
     volumes:
       - companion-data:/data
 
-  # Local-dev only. In production this is the maintainer's shared instance.
-  relay:
-    image: ghcr.io/seergs/vikunja-companion:latest
-    entrypoint: ["/relay"]
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      RELAY_APNS_KEY_PATH: /keys/AuthKey.p8
-      RELAY_APNS_KEY_ID: ${RELAY_APNS_KEY_ID:?}
-      RELAY_APNS_TEAM_ID: ${RELAY_APNS_TEAM_ID:?}
-      RELAY_APNS_TOPIC: ${RELAY_APNS_TOPIC:?}
-      RELAY_DB_PATH: /data/relay.db
-    volumes:
-      - relay-data:/data
-      - ./keys:/keys:ro
-
 volumes:
   companion-data:
-  relay-data:

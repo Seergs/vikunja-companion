@@ -21,15 +21,12 @@ import (
 	"github.com/seergs/vikunja-companion/internal/httpx"
 	"github.com/seergs/vikunja-companion/internal/notify"
 	"github.com/seergs/vikunja-companion/internal/proxy"
-	"github.com/seergs/vikunja-companion/internal/relay"
 	"github.com/seergs/vikunja-companion/internal/store"
 	"github.com/seergs/vikunja-companion/internal/vikunja"
 )
 
 // Version is injected at build time via -ldflags "-X main.Version=...".
 var Version = "dev"
-
-const relayTokenKey = "relay_token"
 
 func main() {
 	if err := run(); err != nil {
@@ -60,7 +57,6 @@ func run() error {
 		"upstream", cfg.UpstreamURL,
 		"public_url", cfg.PublicURL,
 		"webhook_events", cfg.WebhookEvents,
-		"byo_apns", cfg.APNS != nil,
 	)
 
 	db, err := store.Open(cfg.DBPath)
@@ -84,10 +80,9 @@ func run() error {
 	}
 	log.Info("upstream reachable", "url", cfg.UpstreamURL, "vikunja_version", upstreamVersion)
 
-	dispatcher, err := buildDispatcher(context.Background(), cfg, db, cipher, log)
-	if err != nil {
-		return err
-	}
+	// TODO: the Apprise Sender is not built yet. Until it lands, notifications
+	// are logged instead of delivered.
+	dispatcher := notify.New(db, logSender{log}, log)
 
 	rp, err := proxy.New(cfg.UpstreamURL, log)
 	if err != nil {
@@ -97,7 +92,11 @@ func run() error {
 	ctx, stop := httpx.SignalContext()
 	defer stop()
 
-	digestRunner := digest.NewRunner(db, vk, cipher, dispatcher, time.Now, cfg.DigestEnabled, log)
+	// The digest cron acts as one user: whoever COMPANION_VIKUNJA_TOKEN belongs
+	// to. A bad/absent token just disables the digest — the webhook path does
+	// not need it.
+	digestUserID := resolveDigestUser(vk, cfg.VikunjaToken, log)
+	digestRunner := digest.NewRunner(db, vk, dispatcher, cfg.VikunjaToken, digestUserID, time.Now, cfg.DigestEnabled, log)
 	go digestRunner.Run(ctx)
 
 	handler := companion.NewRouter(companion.Options{
@@ -117,35 +116,6 @@ func run() error {
 	return httpx.Serve(cfg.ListenAddr, handler, log)
 }
 
-// buildDispatcher wires notify -> crypto seal -> relay push, registering a relay
-// token on first boot and persisting it.
-func buildDispatcher(ctx context.Context, cfg *config.Companion, db *store.DB, cipher *crypto.Cipher, log *slog.Logger) (*notify.Dispatcher, error) {
-	token := cfg.RelayToken
-	if token == "" {
-		if stored, err := db.Meta(ctx, relayTokenKey); err == nil {
-			token = stored
-		}
-	}
-
-	rc := relay.NewClient(cfg.RelayURL, token, nil)
-	if token == "" {
-		regCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		defer cancel()
-		if minted, err := rc.Register(regCtx); err != nil {
-			// Non-fatal: the companion still proxies and receives webhooks; push
-			// delivery just fails (and logs) until the relay is reachable.
-			log.Warn("could not register with relay — push delivery disabled until it is reachable",
-				"relay", cfg.RelayURL, "err", err)
-		} else if err := db.SetMeta(ctx, relayTokenKey, minted); err != nil {
-			return nil, err
-		} else {
-			log.Info("registered with relay", "relay", cfg.RelayURL)
-		}
-	}
-
-	return notify.New(db, sealer{}, pusher{rc}, log), nil
-}
-
 // probeUpstream confirms VIKUNJA_UPSTREAM_URL answers GET /api/v1/info with a
 // version, returning it.
 func probeUpstream(vk *vikunja.Client) (string, error) {
@@ -162,20 +132,30 @@ func probeUpstream(vk *vikunja.Client) (string, error) {
 	return info.Version, nil
 }
 
-// sealer adapts crypto.Seal to notify.Sealer.
-type sealer struct{}
-
-func (sealer) Seal(plaintext, devicePublicKey []byte) ([]byte, error) {
-	return crypto.Seal(plaintext, devicePublicKey)
+// resolveDigestUser looks up which Vikunja user COMPANION_VIKUNJA_TOKEN belongs
+// to. Returns 0 (digest disabled) when the token is empty or Vikunja rejects it.
+func resolveDigestUser(vk *vikunja.Client, token string, log *slog.Logger) int64 {
+	if token == "" {
+		log.Info("COMPANION_VIKUNJA_TOKEN not set — morning digest disabled")
+		return 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	u, err := vk.User(ctx, token)
+	if err != nil {
+		log.Warn("COMPANION_VIKUNJA_TOKEN rejected by Vikunja — morning digest disabled", "err", err)
+		return 0
+	}
+	log.Info("morning digest enabled", "user", u.ID, "username", u.Username)
+	return u.ID
 }
 
-// pusher adapts *relay.Client to notify.Pusher.
-type pusher struct{ c *relay.Client }
+// logSender is a placeholder notify.Sender: it logs each notification instead
+// of delivering it. It is replaced by the Apprise sender once that lands.
+type logSender struct{ log *slog.Logger }
 
-func (p pusher) Push(ctx context.Context, n notify.Push) error {
-	return p.c.Push(ctx, relay.PushRequest{
-		APNsToken:  n.APNsToken,
-		Ciphertext: n.Ciphertext,
-		CollapseID: n.CollapseID,
-	})
+func (s logSender) Send(_ context.Context, userID int64, n notify.Notification) error {
+	s.log.Warn("notification not delivered — no Apprise sender is implemented yet",
+		"user", userID, "title", n.Title, "body", n.Body)
+	return nil
 }

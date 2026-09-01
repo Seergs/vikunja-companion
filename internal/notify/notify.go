@@ -1,40 +1,32 @@
-// Package notify is the reusable delivery seam: notification -> dedupe -> seal
-// -> relay push.
+// Package notify is the reusable delivery seam: notification -> dedupe -> send
+// to the user's configured channel.
 //
 // It must not import internal/vikunja or internal/webhook, or learn anything
 // Vikunja-specific. The event -> notification mapping lives in the caller (v1:
-// internal/webhook/build.go); post-v1 sources (a /api/v1/notifications poller)
-// call Dispatch the same way without touching sealing or delivery.
+// internal/webhook/build.go and internal/digest); post-v1 sources call Dispatch
+// the same way without touching delivery.
+//
+// The companion does not deliver notifications itself. It POSTs each one to an
+// Apprise endpoint (apprise-api). Dispatch hands the notification to a Sender
+// that does the POST. userID is passed through for a future per-user routing
+// step; the v1 Sender uses one operator-configured endpoint for everyone.
 package notify
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 )
 
-// Notification is the content delivered to a device. It is intentionally tiny —
-// well under the APNs 4 KB limit even sealed.
+// Notification is one delivered message. It is intentionally tiny.
 type Notification struct {
 	Title    string `json:"title"`
 	Body     string `json:"body"`
 	Deeplink string `json:"deeplink,omitempty"`
 
 	// DedupeKey identifies the logical event. A notification whose key has been
-	// seen before is dropped. Not part of the sealed payload.
+	// seen before is dropped.
 	DedupeKey string `json:"-"`
-}
-
-// Device is one target for a user's notifications.
-type Device struct {
-	APNsToken string
-	PublicKey []byte // raw 32-byte X25519 key
-}
-
-// Sealer encrypts a payload to a device's public key (internal/crypto).
-type Sealer interface {
-	Seal(plaintext, devicePublicKey []byte) ([]byte, error)
 }
 
 // Deduper records and checks event fingerprints (internal/store).
@@ -42,38 +34,29 @@ type Deduper interface {
 	MarkSent(ctx context.Context, dedupeKey string) (fresh bool, err error)
 }
 
-// Push is a single sealed delivery for the relay.
-type Push struct {
-	APNsToken  string
-	Ciphertext []byte
-	CollapseID string
-}
-
-// Pusher forwards a sealed payload toward APNs (internal/relay client).
-type Pusher interface {
-	Push(ctx context.Context, p Push) error
+// Sender delivers one notification for a user. It resolves the user's delivery
+// destination (v1: an apprise-api endpoint) and POSTs to it. A user with no
+// destination configured is not an error — Send returns nil.
+type Sender interface {
+	Send(ctx context.Context, userID int64, n Notification) error
 }
 
 // Dispatcher runs the delivery pipeline. Construct it with New.
 type Dispatcher struct {
 	dedupe Deduper
-	sealer Sealer
-	pusher Pusher
+	sender Sender
 	log    *slog.Logger
 }
 
 // New returns a Dispatcher.
-func New(dedupe Deduper, sealer Sealer, pusher Pusher, log *slog.Logger) *Dispatcher {
-	return &Dispatcher{dedupe: dedupe, sealer: sealer, pusher: pusher, log: log}
+func New(dedupe Deduper, sender Sender, log *slog.Logger) *Dispatcher {
+	return &Dispatcher{dedupe: dedupe, sender: sender, log: log}
 }
 
-// Dispatch delivers each notification to every device: it drops duplicates by
-// DedupeKey, seals the payload per device, and pushes it. A per-device push
-// failure is logged and does not stop the rest.
-func (d *Dispatcher) Dispatch(ctx context.Context, devices []Device, notifications []Notification) error {
-	if len(devices) == 0 {
-		return nil
-	}
+// Dispatch delivers each notification for userID: it drops duplicates by
+// DedupeKey, then hands the rest to the Sender. A send failure is logged and
+// does not stop the remaining notifications.
+func (d *Dispatcher) Dispatch(ctx context.Context, userID int64, notifications []Notification) error {
 	for _, n := range notifications {
 		if n.DedupeKey != "" {
 			fresh, err := d.dedupe.MarkSent(ctx, n.DedupeKey)
@@ -86,24 +69,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, devices []Device, notificatio
 			}
 		}
 
-		payload, err := json.Marshal(n)
-		if err != nil {
-			return fmt.Errorf("notify: marshal notification: %w", err)
-		}
-
-		for _, dev := range devices {
-			ciphertext, err := d.sealer.Seal(payload, dev.PublicKey)
-			if err != nil {
-				d.log.Warn("notify: seal failed, skipping device", "err", err)
-				continue
-			}
-			if err := d.pusher.Push(ctx, Push{
-				APNsToken:  dev.APNsToken,
-				Ciphertext: ciphertext,
-				CollapseID: n.DedupeKey,
-			}); err != nil {
-				d.log.Warn("notify: push failed", "err", err)
-			}
+		if err := d.sender.Send(ctx, userID, n); err != nil {
+			d.log.Warn("notify: send failed", "user", userID, "dedupe_key", n.DedupeKey, "err", err)
 		}
 	}
 	return nil

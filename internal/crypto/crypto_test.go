@@ -4,51 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"testing"
-
-	"golang.org/x/crypto/nacl/box"
 )
-
-func TestSealOpensWithRecipientKey(t *testing.T) {
-	pub, priv, err := box.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	msg := []byte(`{"title":"Reminder","body":"Buy milk"}`)
-
-	sealed, err := Seal(msg, pub[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bytes.Contains(sealed, []byte("Buy milk")) {
-		t.Fatal("plaintext leaked into sealed box")
-	}
-	if len(sealed) != len(msg)+box.AnonymousOverhead {
-		t.Errorf("overhead = %d, want %d", len(sealed)-len(msg), box.AnonymousOverhead)
-	}
-
-	got, ok := box.OpenAnonymous(nil, sealed, pub, priv)
-	if !ok {
-		t.Fatal("OpenAnonymous failed")
-	}
-	if !bytes.Equal(got, msg) {
-		t.Errorf("got %q, want %q", got, msg)
-	}
-}
-
-func TestSealRejectsBadKeyLength(t *testing.T) {
-	if _, err := Seal([]byte("x"), make([]byte, 31)); err == nil {
-		t.Fatal("expected error for short key")
-	}
-}
-
-func TestSealIsNondeterministic(t *testing.T) {
-	pub, _, _ := box.GenerateKey(rand.Reader)
-	a, _ := Seal([]byte("same"), pub[:])
-	b, _ := Seal([]byte("same"), pub[:])
-	if bytes.Equal(a, b) {
-		t.Fatal("two seals of the same message are identical (ephemeral key not random?)")
-	}
-}
 
 func masterKey(t *testing.T) []byte {
 	t.Helper()

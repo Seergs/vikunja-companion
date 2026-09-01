@@ -35,17 +35,11 @@ func TestLoadCompanionDefaults(t *testing.T) {
 	if c.DBPath != "/data/companion.db" {
 		t.Errorf("DBPath = %q", c.DBPath)
 	}
-	if c.RelayURL != DefaultRelayURL {
-		t.Errorf("RelayURL = %q, want default", c.RelayURL)
-	}
 	if len(c.MasterKey) != 32 {
 		t.Errorf("MasterKey length = %d, want 32", len(c.MasterKey))
 	}
 	if len(c.WebhookEvents) != len(KnownWebhookEvents) {
 		t.Errorf("WebhookEvents = %v", c.WebhookEvents)
-	}
-	if c.APNS != nil {
-		t.Errorf("APNS = %+v, want nil", c.APNS)
 	}
 }
 
@@ -90,33 +84,5 @@ func TestLoadCompanionUnknownWebhookEvent(t *testing.T) {
 
 	if _, err := LoadCompanion(); err == nil || !strings.Contains(err.Error(), "task.bogus") {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestLoadCompanionPartialAPNS(t *testing.T) {
-	setCompanionEnv(t, map[string]string{
-		"COMPANION_APNS_KEY_PATH": "/keys/AuthKey.p8",
-		"COMPANION_APNS_KEY_ID":   "ABC123",
-	})
-
-	if _, err := LoadCompanion(); err == nil || !strings.Contains(err.Error(), "APNS") {
-		t.Fatalf("err = %v, want partial-APNS complaint", err)
-	}
-}
-
-func TestLoadCompanionFullAPNS(t *testing.T) {
-	setCompanionEnv(t, map[string]string{
-		"COMPANION_APNS_KEY_PATH": "/keys/AuthKey.p8",
-		"COMPANION_APNS_KEY_ID":   "ABC123",
-		"COMPANION_APNS_TEAM_ID":  "TEAM99",
-		"COMPANION_APNS_TOPIC":    "com.example.vikunja",
-	})
-
-	c, err := LoadCompanion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.APNS == nil || c.APNS.Topic != "com.example.vikunja" {
-		t.Fatalf("APNS = %+v", c.APNS)
 	}
 }

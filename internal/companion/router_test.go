@@ -26,14 +26,14 @@ type fakeDispatch struct {
 	calls []dispatchCall
 }
 type dispatchCall struct {
-	devices []notify.Device
-	notifs  []notify.Notification
+	userID int64
+	notifs []notify.Notification
 }
 
-func (f *fakeDispatch) Dispatch(_ context.Context, d []notify.Device, n []notify.Notification) error {
+func (f *fakeDispatch) Dispatch(_ context.Context, userID int64, n []notify.Notification) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, dispatchCall{d, n})
+	f.calls = append(f.calls, dispatchCall{userID, n})
 	return nil
 }
 

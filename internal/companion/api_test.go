@@ -1,16 +1,11 @@
 package companion
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"golang.org/x/crypto/nacl/box"
 
 	"github.com/seergs/vikunja-companion/internal/webhook"
 )
@@ -78,14 +73,7 @@ func TestInboundWebhookFullFlow(t *testing.T) {
 	var setup webhookInfoResponse
 	json.Unmarshal(rec.Body.Bytes(), &setup)
 
-	// 2. user registers a device
-	pub, _, _ := box.GenerateKey(rand.Reader)
-	devBody := `{"apns_token":"apns-abc","public_key":"` + base64.StdEncoding.EncodeToString(pub[:]) + `","app_version":"1.0"}`
-	if rec := do(t, e.handler, "POST", "/companion/v1/devices", e.userToken, devBody); rec.Code != http.StatusCreated {
-		t.Fatalf("register device: %d %s", rec.Code, rec.Body)
-	}
-
-	// 3. Vikunja delivers a signed tasks.overdue
+	// 2. Vikunja delivers a signed tasks.overdue
 	eventBody := `{"event_name":"tasks.overdue","time":"2026-08-29T09:00:00Z","data":{` +
 		`"user":{"id":1,"username":"tester"},` +
 		`"tasks":[{"id":5,"title":"A"},{"id":9,"title":"B"}],` +
@@ -100,19 +88,19 @@ func TestInboundWebhookFullFlow(t *testing.T) {
 		t.Fatalf("inbound webhook: %d %s", wr.Code, wr.Body)
 	}
 
-	// 4. a notification was dispatched to the device
+	// 3. a notification was dispatched for the user
 	if len(e.dispatch.calls) != 1 {
 		t.Fatalf("dispatch called %d times", len(e.dispatch.calls))
 	}
 	call := e.dispatch.calls[0]
-	if len(call.devices) != 1 || call.devices[0].APNsToken != "apns-abc" {
-		t.Errorf("devices = %+v", call.devices)
+	if call.userID != 1 {
+		t.Errorf("dispatched for user %d, want 1", call.userID)
 	}
 	if len(call.notifs) != 1 || call.notifs[0].Body != "You have 2 overdue tasks" {
 		t.Errorf("notifs = %+v", call.notifs)
 	}
 
-	// 5. last_delivery_at is now set
+	// 4. last_delivery_at is now set
 	rec = do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
 	var after webhookInfoResponse
 	json.Unmarshal(rec.Body.Bytes(), &after)
@@ -156,33 +144,5 @@ func TestInboundWebhookUnsupportedEventIs200(t *testing.T) {
 	}
 	if len(e.dispatch.calls) != 0 {
 		t.Error("unsupported event should not dispatch")
-	}
-}
-
-func TestUnregisterLastDeviceDeletesUser(t *testing.T) {
-	e := newTestEnv(t, nil)
-	do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
-
-	pub, _, _ := box.GenerateKey(rand.Reader)
-	devBody := `{"apns_token":"only-device","public_key":"` + base64.StdEncoding.EncodeToString(pub[:]) + `"}`
-	do(t, e.handler, "POST", "/companion/v1/devices", e.userToken, devBody)
-
-	rec := do(t, e.handler, "DELETE", "/companion/v1/devices", e.userToken, `{"apns_token":"only-device"}`)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status %d, want 204", rec.Code)
-	}
-
-	// user row (and cascaded webhook secret) gone
-	if _, err := e.store.Webhook(context.Background(), 1); err == nil {
-		t.Error("webhook secret survived last-device removal")
-	}
-}
-
-func TestRegisterDeviceRejectsBadPublicKey(t *testing.T) {
-	e := newTestEnv(t, nil)
-	rec := do(t, e.handler, "POST", "/companion/v1/devices", e.userToken,
-		`{"apns_token":"t","public_key":"not-base64!!"}`)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status %d, want 400", rec.Code)
 	}
 }

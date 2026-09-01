@@ -1,13 +1,13 @@
-// Package store is the SQLite persistence layer for both binaries.
+// Package store is the companion's SQLite persistence layer.
 //
 // Driver is modernc.org/sqlite (pure Go) so the container stays a distroless
 // static binary — do not switch to mattn/go-sqlite3. The connection pool is
 // pinned to SetMaxOpenConns(1): this is one small service, not a place for a
 // pool.
 //
-// Companion schema: users(user_id, token_enc, ...),
-// devices(id, user_id, apns_token, public_key, app_version, ...),
+// Schema (no users table — see 0001_init.sql):
 // webhooks(user_id, secret_enc, events, last_delivery_at),
+// user_settings(user_id, digest_enabled, digest_time, timezone),
 // notifications_sent(dedupe_key, sent_at).
 package store
 
@@ -15,6 +15,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -26,39 +27,22 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// ErrNotFound is returned when a lookup matches no row.
+var ErrNotFound = errors.New("store: not found")
+
 //go:embed migrations/*.sql
 var companionMigrations embed.FS
 
-//go:embed migrations_relay/*.sql
-var relayMigrations embed.FS
+const migrationsDir = "migrations"
 
-// DB is a thin wrapper over *sql.DB carrying the companion's or the relay's
-// DAOs, depending on which schema Open/OpenRelay applied.
+// DB is a thin wrapper over *sql.DB carrying the companion's DAOs.
 type DB struct {
 	sql *sql.DB
 }
 
-// Open opens the companion database at path, applies pending companion
-// migrations, and returns a ready DB. path may be ":memory:".
+// Open opens the companion database at path, applies pending migrations, and
+// returns a ready DB. path may be ":memory:".
 func Open(path string) (*DB, error) {
-	return open(path, migrationsFrom("migrations", companionMigrations))
-}
-
-// OpenRelay is Open for the relay's schema (opaque tokens only).
-func OpenRelay(path string) (*DB, error) {
-	return open(path, migrationsFrom("migrations_relay", relayMigrations))
-}
-
-type migrationSet struct {
-	fsys embed.FS
-	dir  string
-}
-
-func migrationsFrom(dir string, fsys embed.FS) migrationSet {
-	return migrationSet{fsys: fsys, dir: dir}
-}
-
-func open(path string, ms migrationSet) (*DB, error) {
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
 	if path == ":memory:" {
 		dsn = "file::memory:?cache=shared&_pragma=foreign_keys(ON)"
@@ -83,7 +67,7 @@ func open(path string, ms migrationSet) (*DB, error) {
 	}
 
 	db := &DB{sql: sqlDB}
-	if err := db.migrate(ctx, ms); err != nil {
+	if err := db.migrate(ctx); err != nil {
 		sqlDB.Close()
 		return nil, err
 	}
@@ -105,14 +89,14 @@ func parseDBTime(s string) time.Time {
 
 // migrate applies every embedded migration not yet recorded in
 // schema_migrations, in filename order, each in its own transaction.
-func (db *DB) migrate(ctx context.Context, ms migrationSet) error {
+func (db *DB) migrate(ctx context.Context) error {
 	if _, err := db.sql.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
 	); err != nil {
 		return fmt.Errorf("store: creating schema_migrations: %w", err)
 	}
 
-	entries, err := fs.ReadDir(ms.fsys, ms.dir)
+	entries, err := fs.ReadDir(companionMigrations, migrationsDir)
 	if err != nil {
 		return fmt.Errorf("store: reading migrations: %w", err)
 	}
@@ -135,7 +119,7 @@ func (db *DB) migrate(ctx context.Context, ms migrationSet) error {
 			continue
 		}
 
-		body, err := ms.fsys.ReadFile(ms.dir + "/" + name)
+		body, err := companionMigrations.ReadFile(migrationsDir + "/" + name)
 		if err != nil {
 			return fmt.Errorf("store: reading migration %s: %w", name, err)
 		}

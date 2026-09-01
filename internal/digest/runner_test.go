@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/seergs/vikunja-companion/internal/crypto"
 	"github.com/seergs/vikunja-companion/internal/notify"
 	"github.com/seergs/vikunja-companion/internal/store"
 	"github.com/seergs/vikunja-companion/internal/vikunja"
@@ -41,10 +40,12 @@ func (f *fakeVK) TasksDueToday(_ context.Context, _, _ string) ([]vikunja.Task, 
 
 type fakeDispatch struct {
 	notifs [][]notify.Notification
+	users  []int64
 }
 
-func (f *fakeDispatch) Dispatch(_ context.Context, _ []notify.Device, n []notify.Notification) error {
+func (f *fakeDispatch) Dispatch(_ context.Context, userID int64, n []notify.Notification) error {
 	f.notifs = append(f.notifs, n)
+	f.users = append(f.users, userID)
 	return nil
 }
 
@@ -64,22 +65,6 @@ func newRunnerEnv(t *testing.T, vk *fakeVK) *runnerEnv {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	cipher, err := crypto.NewCipher(make([]byte, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokenEnc, err := cipher.Encrypt([]byte("tok-1"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	if err := db.UpsertUserToken(ctx, 1, tokenEnc); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.UpsertDevice(ctx, store.Device{UserID: 1, APNsToken: "apns-1", PublicKey: make([]byte, 32)}); err != nil {
-		t.Fatal(err)
-	}
-
 	env := &runnerEnv{
 		store:    db,
 		vk:       vk,
@@ -87,7 +72,7 @@ func newRunnerEnv(t *testing.T, vk *fakeVK) *runnerEnv {
 		now:      time.Date(2026, 8, 29, 8, 30, 0, 0, time.UTC),
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	env.runner = NewRunner(db, vk, cipher, env.dispatch, func() time.Time { return env.now }, true, log)
+	env.runner = NewRunner(db, vk, env.dispatch, "tok-1", 1, func() time.Time { return env.now }, true, log)
 	return env
 }
 

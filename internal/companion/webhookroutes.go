@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/seergs/vikunja-companion/internal/notify"
 	"github.com/seergs/vikunja-companion/internal/store"
 	"github.com/seergs/vikunja-companion/internal/webhook"
 )
@@ -31,7 +30,7 @@ func (a *api) getWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	secret, err := a.ensureWebhookSecret(ctx, id.UserID, bearerToken(r))
+	secret, err := a.ensureWebhookSecret(ctx, id.UserID)
 	if err != nil {
 		a.log.Error("webhook setup", "user", id.UserID, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errBody("could not prepare webhook secret"))
@@ -46,17 +45,9 @@ func (a *api) getWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ensureWebhookSecret stores the caller's Vikunja token (encrypted) and returns
-// their webhook HMAC secret, generating and storing it on first call.
-func (a *api) ensureWebhookSecret(ctx context.Context, userID int64, token string) (string, error) {
-	tokenEnc, err := a.cipher.Encrypt([]byte(token))
-	if err != nil {
-		return "", err
-	}
-	if err := a.store.UpsertUserToken(ctx, userID, tokenEnc); err != nil {
-		return "", err
-	}
-
+// ensureWebhookSecret returns the caller's webhook HMAC secret, generating and
+// storing it (encrypted) on first call and returning the same one thereafter.
+func (a *api) ensureWebhookSecret(ctx context.Context, userID int64) (string, error) {
 	switch wh, err := a.store.Webhook(ctx, userID); {
 	case err == nil:
 		plain, derr := a.cipher.Decrypt(wh.SecretEnc)
@@ -113,13 +104,7 @@ func (a *api) inboundWebhook(w http.ResponseWriter, r *http.Request) {
 
 	notifications := webhook.Build(ev)
 	if len(notifications) > 0 {
-		devices, err := a.devicesForUser(ctx, userID)
-		if err != nil {
-			a.log.Error("loading devices", "user", userID, "err", err)
-			writeJSON(w, http.StatusInternalServerError, errBody("delivery failed"))
-			return
-		}
-		if err := a.dispatch.Dispatch(ctx, devices, notifications); err != nil {
+		if err := a.dispatch.Dispatch(ctx, userID, notifications); err != nil {
 			a.log.Error("dispatching notifications", "user", userID, "err", err)
 			writeJSON(w, http.StatusInternalServerError, errBody("delivery failed"))
 			return
@@ -149,16 +134,4 @@ func (a *api) matchSecret(ctx context.Context, body []byte, sig string) (int64, 
 		}
 	}
 	return 0, false
-}
-
-func (a *api) devicesForUser(ctx context.Context, userID int64) ([]notify.Device, error) {
-	rows, err := a.store.DevicesForUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]notify.Device, 0, len(rows))
-	for _, d := range rows {
-		out = append(out, notify.Device{APNsToken: d.APNsToken, PublicKey: d.PublicKey})
-	}
-	return out, nil
 }

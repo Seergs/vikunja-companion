@@ -19,7 +19,8 @@
 //
 // The envelope is {event_name, time, data}. The data shapes and the quirks are
 // written up in docs/webhooks-verified.md.
+//
+// This package: NewSecret / Sign / Verify (verify.go), Parse (event.go), and
+// Build — the event -> []notify.Notification mapping (build.go). The HTTP
+// handlers that call them live in internal/companion.
 package webhook
-
-// TODO(fase-2): VerifySignature; ParseEvent; the setup helper (generate + store
-// a per-user secret, return {target_url, secret, events}); the inbound handler.

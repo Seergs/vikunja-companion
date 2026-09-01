@@ -16,8 +16,9 @@ const (
 	defaultInfoTTL     = 1 * time.Minute
 )
 
-// v1Features is the capability list advertised by /companion/v1/info. "digest"
-// gates the morning-briefing settings UI in the app.
+// v1Features is the capability list advertised by /companion/v1/info. "push"
+// means the companion can deliver task notifications to a channel the user
+// configures; "digest" gates the morning-briefing settings UI in the app.
 var v1Features = []string{"push", "digest"}
 
 // Options configures NewRouter.
@@ -84,8 +85,6 @@ func NewRouter(opts Options) http.Handler {
 	m.HandleFunc("GET /companion/v1/info", info.ServeHTTP)
 	m.HandleFunc("GET /companion/v1/webhook", a.getWebhook)
 	m.HandleFunc("POST /companion/v1/webhooks/vikunja", a.inboundWebhook)
-	m.HandleFunc("POST /companion/v1/devices", a.registerDevice)
-	m.HandleFunc("DELETE /companion/v1/devices", a.unregisterDevice)
 	m.HandleFunc("GET /companion/v1/settings", a.getSettings)
 	m.HandleFunc("PUT /companion/v1/settings", a.putSettings)
 

@@ -1,10 +1,5 @@
-// Package crypto holds the two independent primitives the companion needs:
-//
-//   - Seal: a NaCl sealed box (crypto_box_seal — ephemeral X25519 +
-//     XSalsa20-Poly1305) that encrypts a notification payload to a device's
-//     X25519 public key, so the relay never sees content.
-//   - Cipher: authenticated encryption of small secrets at rest (the Vikunja
-//     API token, the webhook HMAC secret) with the companion master key.
+// Package crypto holds authenticated encryption of small secrets at rest (the
+// Vikunja API token, the webhook HMAC secret) with the companion master key.
 package crypto
 
 import (
@@ -14,30 +9,7 @@ import (
 	"fmt"
 
 	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/nacl/box"
 )
-
-// PublicKeySize is the length of an X25519 public key.
-const PublicKeySize = 32
-
-// Seal encrypts plaintext to recipientPublicKey (a 32-byte X25519 public key)
-// as an anonymous NaCl sealed box. The output is
-// ephemeralPublicKey(32) || box, ~48 bytes larger than plaintext. Only the
-// holder of the matching private key (the device's Notification Service
-// Extension) can open it.
-func Seal(plaintext, recipientPublicKey []byte) ([]byte, error) {
-	if len(recipientPublicKey) != PublicKeySize {
-		return nil, fmt.Errorf("crypto: recipient public key must be %d bytes, got %d", PublicKeySize, len(recipientPublicKey))
-	}
-	var pk [PublicKeySize]byte
-	copy(pk[:], recipientPublicKey)
-
-	sealed, err := box.SealAnonymous(nil, plaintext, &pk, rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("crypto: seal: %w", err)
-	}
-	return sealed, nil
-}
 
 // Cipher encrypts and decrypts small values at rest with the companion master
 // key using XChaCha20-Poly1305. The 24-byte random nonce makes reuse a

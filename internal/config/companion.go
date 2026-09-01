@@ -6,25 +6,12 @@ import (
 	"strings"
 )
 
-// DefaultRelayURL is the project-operated relay used when COMPANION_RELAY_URL is
-// unset. Placeholder until the relay is deployed.
-const DefaultRelayURL = "https://relay.vikunja-companion.invalid"
-
-// KnownWebhookEvents is the complete v1 push surface: the only user-directed
-// webhook events Vikunja emits.
+// KnownWebhookEvents is the complete v1 notification surface: the only
+// user-directed webhook events Vikunja emits.
 var KnownWebhookEvents = []string{
 	"task.reminder.fired",
 	"task.overdue",
 	"tasks.overdue",
-}
-
-// APNS holds a bring-your-own Apple Push credential set. When set, the companion
-// talks to APNs directly and bypasses the relay.
-type APNS struct {
-	KeyPath string
-	KeyID   string
-	TeamID  string
-	Topic   string
 }
 
 // Companion is the validated configuration for cmd/companion.
@@ -34,10 +21,8 @@ type Companion struct {
 	UpstreamURL   string
 	DBPath        string
 	MasterKey     []byte
-	RelayURL      string
-	RelayToken    string
 	WebhookEvents []string
-	APNS          *APNS
+	VikunjaToken  string // COMPANION_VIKUNJA_TOKEN; the digest cron acts as this user. Empty -> digest off.
 	DigestEnabled bool
 	LogLevel      string
 }
@@ -55,7 +40,7 @@ func LoadCompanion() (*Companion, error) {
 	c := &Companion{
 		ListenAddr:    get("COMPANION_LISTEN_ADDR", ":8080"),
 		DBPath:        get("COMPANION_DB_PATH", "/data/companion.db"),
-		RelayToken:    get("COMPANION_RELAY_TOKEN", ""),
+		VikunjaToken:  get("COMPANION_VIKUNJA_TOKEN", ""),
 		DigestEnabled: boolDefault("COMPANION_DIGEST_ENABLED", true),
 		LogLevel:      get("COMPANION_LOG_LEVEL", "info"),
 	}
@@ -84,22 +69,10 @@ func LoadCompanion() (*Companion, error) {
 		c.MasterKey = k
 	}
 
-	if v, err := parseHTTPURL("COMPANION_RELAY_URL", get("COMPANION_RELAY_URL", DefaultRelayURL)); err != nil {
-		push(err)
-	} else {
-		c.RelayURL = v
-	}
-
 	if events, err := parseWebhookEvents(get("COMPANION_WEBHOOK_EVENTS", strings.Join(KnownWebhookEvents, ","))); err != nil {
 		push(err)
 	} else {
 		c.WebhookEvents = events
-	}
-
-	if apns, err := loadAPNS(); err != nil {
-		push(err)
-	} else {
-		c.APNS = apns
 	}
 
 	if len(errs) > 0 {
@@ -128,32 +101,6 @@ func parseWebhookEvents(raw string) ([]string, error) {
 		return nil, fmt.Errorf("COMPANION_WEBHOOK_EVENTS: at least one event is required")
 	}
 	return out, nil
-}
-
-// loadAPNS returns a fully-populated *APNS, nil if none of the vars are set, or
-// an error if the set is partial.
-func loadAPNS() (*APNS, error) {
-	keys := []string{
-		"COMPANION_APNS_KEY_PATH",
-		"COMPANION_APNS_KEY_ID",
-		"COMPANION_APNS_TEAM_ID",
-		"COMPANION_APNS_TOPIC",
-	}
-	vals := make([]string, len(keys))
-	set := 0
-	for i, k := range keys {
-		if v, ok := lookup(k); ok && v != "" {
-			vals[i] = v
-			set++
-		}
-	}
-	if set == 0 {
-		return nil, nil
-	}
-	if set < len(keys) {
-		return nil, fmt.Errorf("COMPANION_APNS_*: all of %s must be set together", strings.Join(keys, ", "))
-	}
-	return &APNS{KeyPath: vals[0], KeyID: vals[1], TeamID: vals[2], Topic: vals[3]}, nil
 }
 
 func contains(haystack []string, needle string) bool {

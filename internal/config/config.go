@@ -25,17 +25,6 @@ func get(key, def string) string {
 	return def
 }
 
-// boolVal reports whether the env var is set to a truthy value
-// (1/true/yes/on, case-insensitive).
-func boolVal(key string) bool {
-	switch strings.ToLower(get(key, "")) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 // boolDefault parses a truthy value (1/true/yes/on, case-insensitive),
 // returning def when the var is unset or empty.
 func boolDefault(key string, def bool) bool {

@@ -13,9 +13,10 @@ import (
 	"github.com/seergs/vikunja-companion/internal/vikunja"
 )
 
-// dispatcher delivers notifications for a user's devices (internal/notify).
+// dispatcher delivers a user's notifications to their configured channel
+// (internal/notify).
 type dispatcher interface {
-	Dispatch(ctx context.Context, devices []notify.Device, notifications []notify.Notification) error
+	Dispatch(ctx context.Context, userID int64, notifications []notify.Notification) error
 }
 
 // userSettingsFetcher reads a caller's Vikunja settings (the timezone the

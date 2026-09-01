@@ -54,15 +54,6 @@ func (a *api) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	// Persist the caller's token (the digest cron acts as them between app
-	// sessions) — this also creates the users row user_settings references.
-	if tokenEnc, err := a.cipher.Encrypt([]byte(bearerToken(r))); err == nil {
-		if err := a.store.UpsertUserToken(ctx, id.UserID, tokenEnc); err != nil {
-			a.log.Error("storing user token", "user", id.UserID, "err", err)
-			writeJSON(w, http.StatusInternalServerError, errBody("could not save settings"))
-			return
-		}
-	}
 	if err := a.store.PutDigestSettings(ctx, id.UserID, body.Digest.Enabled, body.Digest.Time); err != nil {
 		a.log.Error("saving settings", "user", id.UserID, "err", err)
 		writeJSON(w, http.StatusInternalServerError, errBody("could not save settings"))
