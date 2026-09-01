@@ -3,6 +3,8 @@ package webhook
 import (
 	"testing"
 	"time"
+
+	"github.com/seergs/vikunja-companion/internal/notify"
 )
 
 func TestBuildReminder(t *testing.T) {
@@ -24,6 +26,18 @@ func TestBuildReminder(t *testing.T) {
 	}
 	if ns[0].DedupeKey != "reminder:12:1756468800" {
 		t.Errorf("dedupe = %q", ns[0].DedupeKey)
+	}
+	if ns[0].Level != "" {
+		t.Errorf("reminder should be default level, got %q", ns[0].Level)
+	}
+}
+
+func TestBuildOverdueIsWarning(t *testing.T) {
+	at := time.Date(2026, 8, 29, 9, 0, 0, 0, time.UTC)
+	single := Build(&Event{TaskOverdue: &TaskOverdueData{Task: Task{ID: 5, Title: "x"}, User: User{ID: 1}}, Time: at})
+	batch := Build(&Event{TasksOverdue: &TasksOverdueData{User: User{ID: 7}, Tasks: []Task{{ID: 1}, {ID: 2}}}, Time: at})
+	if single[0].Level != notify.LevelWarning || batch[0].Level != notify.LevelWarning {
+		t.Errorf("overdue notifications must be warnings: single=%q batch=%q", single[0].Level, batch[0].Level)
 	}
 }
 

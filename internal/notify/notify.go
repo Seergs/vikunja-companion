@@ -18,11 +18,21 @@ import (
 	"log/slog"
 )
 
+// Level is the severity of a notification. It maps onto whatever the delivery
+// channel calls it (Apprise "type", etc.). The zero value is LevelInfo.
+type Level string
+
+const (
+	LevelInfo    Level = "info"
+	LevelWarning Level = "warning"
+)
+
 // Notification is one delivered message. It is intentionally tiny.
 type Notification struct {
 	Title    string `json:"title"`
 	Body     string `json:"body"`
 	Deeplink string `json:"deeplink,omitempty"`
+	Level    Level  `json:"level,omitempty"`
 
 	// DedupeKey identifies the logical event. A notification whose key has been
 	// seen before is dropped.

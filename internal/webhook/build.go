@@ -40,6 +40,7 @@ func buildTaskOverdue(d *TaskOverdueData, at time.Time) []notify.Notification {
 		Title:     taskLabel(d.Task),
 		Body:      "Overdue",
 		Deeplink:  taskLink(d.Task.ID),
+		Level:     notify.LevelWarning,
 		DedupeKey: fmt.Sprintf("overdue:%d:%s", d.Task.ID, at.Format("2006-01-02")),
 	}}
 }
@@ -55,6 +56,7 @@ func buildTasksOverdue(d *TasksOverdueData, at time.Time) []notify.Notification 
 			Title:     taskLabel(t),
 			Body:      "Overdue",
 			Deeplink:  taskLink(t.ID),
+			Level:     notify.LevelWarning,
 			DedupeKey: fmt.Sprintf("overdue-batch:%d:%s", d.User.ID, at.Format("2006-01-02")),
 		}}
 	}
@@ -62,6 +64,7 @@ func buildTasksOverdue(d *TasksOverdueData, at time.Time) []notify.Notification 
 		Title:     "Overdue tasks",
 		Body:      fmt.Sprintf("You have %d overdue tasks", n),
 		Deeplink:  "today",
+		Level:     notify.LevelWarning,
 		DedupeKey: fmt.Sprintf("overdue-batch:%d:%s", d.User.ID, at.Format("2006-01-02")),
 	}}
 }
