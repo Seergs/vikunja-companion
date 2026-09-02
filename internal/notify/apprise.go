@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 )
 
@@ -43,8 +43,11 @@ type appriseRequest struct {
 // Send delivers n to the apprise-api endpoint. userID is ignored in v1 (the
 // endpoint is one fleet-wide operator setting).
 func (a *Apprise) Send(ctx context.Context, _ int64, n Notification) error {
-	body := strings.TrimRight(n.Body, "\n")
-	if n.Deeplink != "" {
+	body := n.Body
+	// Apprise renders plain title+body with no click action, so a relative
+	// deep link (task/12, today) is just noise there. Append it only if it is a
+	// full URL something could open.
+	if u, err := url.Parse(n.Deeplink); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
 		body += "\n" + n.Deeplink
 	}
 	payload, err := json.Marshal(appriseRequest{

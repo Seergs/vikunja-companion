@@ -38,7 +38,7 @@ func TestAppriseSendStateless(t *testing.T) {
 	srv, got := appriseServer(t, http.StatusOK)
 	a := NewApprise(srv.URL+"/notify", "ntfy://ntfy.sh/topic", "sekret", srv.Client())
 
-	n := Notification{Title: "Overdue tasks", Body: "You have 2 overdue tasks", Deeplink: "today", Level: LevelWarning}
+	n := Notification{Title: "Overdue tasks", Body: "You have 2 overdue tasks", Deeplink: "https://vk.example/tasks/9", Level: LevelWarning}
 	if err := a.Send(context.Background(), 1, n); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
@@ -58,8 +58,21 @@ func TestAppriseSendStateless(t *testing.T) {
 	if got.body.Title != "Overdue tasks" || got.body.Type != "warning" || got.body.Format != "text" {
 		t.Errorf("body = %+v", got.body)
 	}
-	if got.body.Body != "You have 2 overdue tasks\ntoday" {
-		t.Errorf("body text = %q (deeplink not appended?)", got.body.Body)
+	if got.body.Body != "You have 2 overdue tasks\nhttps://vk.example/tasks/9" {
+		t.Errorf("body text = %q (URL deeplink not appended?)", got.body.Body)
+	}
+}
+
+func TestAppriseSendDropsRelativeDeeplink(t *testing.T) {
+	srv, got := appriseServer(t, http.StatusOK)
+	a := NewApprise(srv.URL+"/notify", "", "", srv.Client())
+
+	n := Notification{Title: "Daily briefing", Body: "You have 3 tasks due in Vikunja today.", Deeplink: "today"}
+	if err := a.Send(context.Background(), 1, n); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if got.body.Body != "You have 3 tasks due in Vikunja today." {
+		t.Errorf("relative deeplink leaked into body: %q", got.body.Body)
 	}
 }
 
