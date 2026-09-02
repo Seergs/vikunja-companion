@@ -92,6 +92,9 @@ func TestAppriseSendNon2xxIsError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "424") {
 		t.Fatalf("err = %v, want a 424 error", err)
 	}
+	if !strings.Contains(err.Error(), srv.URL+"/notify") {
+		t.Errorf("error should name the target URL: %v", err)
+	}
 }
 
 func TestAppriseSendTransportErrorIsError(t *testing.T) {

@@ -69,13 +69,14 @@ func (a *Apprise) Send(ctx context.Context, _ int64, n Notification) error {
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("apprise: post: %w", err)
+		return fmt.Errorf("apprise: POST %s: %w", a.apiURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode/100 != 2 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("apprise: %s: %s", resp.Status, bytes.TrimSpace(snippet))
+		// resp.Request.URL is the final URL after any redirects.
+		return fmt.Errorf("apprise: POST %s -> %s: %s", resp.Request.URL, resp.Status, bytes.TrimSpace(snippet))
 	}
 	return nil
 }
