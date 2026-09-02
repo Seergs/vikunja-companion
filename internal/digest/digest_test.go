@@ -21,11 +21,11 @@ func TestBuild(t *testing.T) {
 		want  string // "" means no notification
 	}{
 		{"none", nil, ""},
-		{"one, not urgent", tasks(2), "1 task for today"},
-		{"several, none urgent", tasks(0, 1, 3), "3 tasks for today"},
-		{"urgent priority 4", tasks(1, 4), "2 tasks for today · 1 urgent"},
-		{"do-now counts as urgent", tasks(5, 5, 2), "3 tasks for today · 2 urgent"},
-		{"priority 3 is not urgent", tasks(3, 3), "2 tasks for today"},
+		{"one, not urgent", tasks(2), "You have 1 task due in Vikunja today."},
+		{"several, none urgent", tasks(0, 1, 3), "You have 3 tasks due in Vikunja today."},
+		{"urgent priority 4", tasks(1, 4), "You have 2 tasks due in Vikunja today. 1 is urgent."},
+		{"do-now counts as urgent", tasks(5, 5, 2), "You have 3 tasks due in Vikunja today. 2 are urgent."},
+		{"priority 3 is not urgent", tasks(3, 3), "You have 2 tasks due in Vikunja today."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,7 +43,7 @@ func TestBuild(t *testing.T) {
 			if n.Body != tc.want {
 				t.Errorf("body = %q, want %q", n.Body, tc.want)
 			}
-			if n.Title != "Today" || n.Deeplink != "today" {
+			if n.Title != "Daily briefing" || n.Deeplink != "today" {
 				t.Errorf("title/deeplink = %q/%q", n.Title, n.Deeplink)
 			}
 			if n.DedupeKey != "digest:1:2026-08-29" {

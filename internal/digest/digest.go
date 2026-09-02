@@ -1,7 +1,7 @@
 // Package digest builds and delivers the morning briefing: one forward-looking
-// push per user per day ("8 tasks for today · 1 urgent"), at a time the user
-// picks. It is a pull source — Vikunja emits no "your day" event — so a cron in
-// cmd/companion drives it, reading each user's tasks with their stored token
+// notification per day ("You have 8 tasks due in Vikunja today"), at a time the
+// user picks. It is a pull source — Vikunja emits no "your day" event — so a
+// cron in cmd/companion drives it, reading tasks with COMPANION_VIKUNJA_TOKEN
 // and calling the same notify.Dispatcher seam internal/webhook uses.
 //
 // Like internal/webhook, this package may import internal/vikunja; internal/notify
@@ -23,7 +23,7 @@ const urgentPriority = 4
 
 // Build turns a user's tasks-due-through-today into the single morning
 // notification, or nil when there is nothing to report. dedupeKey scopes
-// delivery to one per user per day and doubles as the APNs collapse id.
+// delivery to one per user per day.
 func Build(tasks []vikunja.Task, dedupeKey string) []notify.Notification {
 	total := len(tasks)
 	if total == 0 {
@@ -36,13 +36,13 @@ func Build(tasks []vikunja.Task, dedupeKey string) []notify.Notification {
 		}
 	}
 
-	body := fmt.Sprintf("%d %s for today", total, plural(total, "task", "tasks"))
+	body := fmt.Sprintf("You have %d %s due in Vikunja today.", total, plural(total, "task", "tasks"))
 	if urgent > 0 {
-		body += fmt.Sprintf(" · %d urgent", urgent)
+		body += fmt.Sprintf(" %d %s urgent.", urgent, plural(urgent, "is", "are"))
 	}
 
 	return []notify.Notification{{
-		Title:     "Today",
+		Title:     "Daily briefing",
 		Body:      body,
 		Deeplink:  "today",
 		DedupeKey: dedupeKey,

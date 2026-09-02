@@ -89,7 +89,7 @@ func TestRunnerSendsOncePerDay(t *testing.T) {
 	if len(env.dispatch.notifs) != 1 {
 		t.Fatalf("dispatched %d times, want 1", len(env.dispatch.notifs))
 	}
-	if body := env.dispatch.notifs[0][0].Body; body != "2 tasks for today · 1 urgent" {
+	if body := env.dispatch.notifs[0][0].Body; body != "You have 2 tasks due in Vikunja today. 1 is urgent." {
 		t.Errorf("body = %q", body)
 	}
 	if env.vk.tasksCalls != 1 {
