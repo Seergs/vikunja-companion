@@ -1,5 +1,5 @@
 # Single static binary, distroless. CGO-free so the container needs no libc.
-FROM golang:1.25 AS build
+FROM golang:1.27 AS build
 WORKDIR /src
 
 COPY go.mod go.sum* ./

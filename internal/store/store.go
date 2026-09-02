@@ -62,13 +62,13 @@ func Open(path string) (*DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := sqlDB.PingContext(ctx); err != nil {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 		return nil, fmt.Errorf("store: ping %s: %w", path, err)
 	}
 
 	db := &DB{sql: sqlDB}
 	if err := db.migrate(ctx); err != nil {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 		return nil, err
 	}
 	return db, nil
@@ -129,11 +129,11 @@ func (db *DB) migrate(ctx context.Context) error {
 			return fmt.Errorf("store: begin migration %s: %w", name, err)
 		}
 		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("store: applying migration %s: %w", name, err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("store: recording migration %s: %w", name, err)
 		}
 		if err := tx.Commit(); err != nil {

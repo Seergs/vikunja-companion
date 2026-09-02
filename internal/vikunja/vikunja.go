@@ -104,7 +104,7 @@ func (c *Client) do(ctx context.Context, method, path, token string, out any) er
 	if err != nil {
 		return fmt.Errorf("vikunja: %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {

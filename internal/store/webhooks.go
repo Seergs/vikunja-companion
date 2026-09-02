@@ -71,7 +71,7 @@ func (db *DB) AllWebhookSecrets(ctx context.Context) ([]WebhookSecret, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: all webhook secrets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []WebhookSecret
 	for rows.Next() {

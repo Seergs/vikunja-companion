@@ -15,7 +15,9 @@ func TestGetSettingsReturnsDefaults(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 	var s settingsResponse
-	json.Unmarshal(rec.Body.Bytes(), &s)
+	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
 	if !s.Digest.Enabled || s.Digest.Time != "08:00" {
 		t.Errorf("defaults = %+v", s)
 	}
@@ -37,7 +39,9 @@ func TestPutSettingsStoresAndEchoes(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 	var s settingsResponse
-	json.Unmarshal(rec.Body.Bytes(), &s)
+	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
 	if s.Digest.Enabled || s.Digest.Time != "07:30" {
 		t.Errorf("echo = %+v", s)
 	}

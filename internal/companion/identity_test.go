@@ -61,8 +61,8 @@ func TestIdentityCacheExpires(t *testing.T) {
 func TestIdentityCacheDistinctTokens(t *testing.T) {
 	f := &fakeResolver{user: &vikunja.User{ID: 5}}
 	c := NewIdentityCache(f, time.Minute)
-	c.Resolve(context.Background(), "a")
-	c.Resolve(context.Background(), "b")
+	_, _ = c.Resolve(context.Background(), "a")
+	_, _ = c.Resolve(context.Background(), "b")
 	if f.calls != 2 {
 		t.Errorf("calls = %d, want 2", f.calls)
 	}

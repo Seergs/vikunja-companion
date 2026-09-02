@@ -11,7 +11,7 @@ func openTemp(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
@@ -22,7 +22,7 @@ func TestOpenIsIdempotent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Open #%d: %v", i, err)
 		}
-		db.Close()
+		_ = db.Close()
 	}
 }
 
