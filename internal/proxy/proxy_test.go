@@ -23,7 +23,7 @@ func TestProxyForwardsVerbatim(t *testing.T) {
 		gotBody = string(b)
 		w.Header().Set("X-Upstream", "yes")
 		w.WriteHeader(http.StatusTeapot)
-		io.WriteString(w, "hello from upstream")
+		_, _ = io.WriteString(w, "hello from upstream")
 	}))
 	defer upstream.Close()
 
@@ -41,7 +41,7 @@ func TestProxyForwardsVerbatim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 
 	upstreamHost := strings.TrimPrefix(upstream.URL, "http://")
@@ -81,7 +81,7 @@ func TestProxyUpstreamDownReturns502(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Errorf("status = %d, want 502", resp.StatusCode)
 	}

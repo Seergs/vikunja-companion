@@ -57,13 +57,13 @@ func newTestEnv(t *testing.T, proxy http.Handler) *testEnv {
 		switch r.URL.Path {
 		case "/api/v1/info":
 			atomic.AddInt32(&infoCalls, 1)
-			w.Write([]byte(`{"version":"v2.5.0"}`))
+			_, _ = w.Write([]byte(`{"version":"v2.5.0"}`))
 		case "/api/v1/user":
 			if r.Header.Get("Authorization") != "Bearer good-token" {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			w.Write([]byte(`{"id":1,"username":"tester","settings":{"timezone":"America/New_York"}}`))
+			_, _ = w.Write([]byte(`{"id":1,"username":"tester","settings":{"timezone":"America/New_York"}}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -74,7 +74,7 @@ func newTestEnv(t *testing.T, proxy http.Handler) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	key := make([]byte, 32)
 	cipher, err := crypto.NewCipher(key)

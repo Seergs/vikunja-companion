@@ -63,7 +63,7 @@ func newRunnerEnv(t *testing.T, vk *fakeVK) *runnerEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	env := &runnerEnv{
 		store:    db,
@@ -101,12 +101,12 @@ func TestRunnerRespectsWindow(t *testing.T) {
 	ctx := context.Background()
 
 	before := newRunnerEnv(t, &fakeVK{tasks: []vikunja.Task{{Priority: 1}}})
-	before.store.SetUserTimezone(ctx, 1, "UTC")
+	_ = before.store.SetUserTimezone(ctx, 1, "UTC")
 	before.now = time.Date(2026, 8, 29, 7, 59, 0, 0, time.UTC)
 	before.runner.RunOnce(ctx)
 
 	after := newRunnerEnv(t, &fakeVK{tasks: []vikunja.Task{{Priority: 1}}})
-	after.store.SetUserTimezone(ctx, 1, "UTC")
+	_ = after.store.SetUserTimezone(ctx, 1, "UTC")
 	after.now = time.Date(2026, 8, 29, 10, 30, 0, 0, time.UTC) // >2h past 08:00
 	after.runner.RunOnce(ctx)
 
@@ -147,7 +147,7 @@ func TestRunnerTimezoneOffsetsTheWindow(t *testing.T) {
 func TestRunnerZeroTasksSendsNothingButRecords(t *testing.T) {
 	env := newRunnerEnv(t, &fakeVK{tasks: nil})
 	ctx := context.Background()
-	env.store.SetUserTimezone(ctx, 1, "UTC")
+	_ = env.store.SetUserTimezone(ctx, 1, "UTC")
 
 	env.runner.RunOnce(ctx)
 	env.runner.RunOnce(ctx)
@@ -163,7 +163,7 @@ func TestRunnerZeroTasksSendsNothingButRecords(t *testing.T) {
 func TestRunnerSkipsDisabled(t *testing.T) {
 	env := newRunnerEnv(t, &fakeVK{tasks: []vikunja.Task{{Priority: 1}}})
 	ctx := context.Background()
-	env.store.SetUserTimezone(ctx, 1, "UTC")
+	_ = env.store.SetUserTimezone(ctx, 1, "UTC")
 	if err := env.store.PutDigestSettings(ctx, 1, false, "08:00"); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestRunnerSkipsDisabled(t *testing.T) {
 func TestRunnerTaskFetchErrorIsRetriable(t *testing.T) {
 	env := newRunnerEnv(t, &fakeVK{tasksErr: errors.New("vikunja down")})
 	ctx := context.Background()
-	env.store.SetUserTimezone(ctx, 1, "UTC")
+	_ = env.store.SetUserTimezone(ctx, 1, "UTC")
 
 	env.runner.RunOnce(ctx)
 	env.vk.tasksErr = nil

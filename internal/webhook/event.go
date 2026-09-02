@@ -133,14 +133,14 @@ type wireProject struct {
 	Title string `json:"title"`
 }
 
-func (w wireProject) to() Project { return Project{ID: w.ID, Title: w.Title} }
+func (w wireProject) to() Project { return Project(w) }
 
 type wireUser struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 }
 
-func (w wireUser) to() User { return User{ID: w.ID, Username: w.Username} }
+func (w wireUser) to() User { return User(w) }
 
 // vikunjaTime unmarshals an RFC3339 string, mapping Go's zero year (Vikunja's
 // "unset" marker, "0001-01-01T00:00:00Z") to the zero time.Time.

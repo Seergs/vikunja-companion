@@ -34,7 +34,9 @@ func TestGetWebhookIssuesStableSecret(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 	var first webhookInfoResponse
-	json.Unmarshal(rec.Body.Bytes(), &first)
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
 
 	if first.TargetURL != "https://companion.example.com/companion/v1/webhooks/vikunja" {
 		t.Errorf("target_url = %q", first.TargetURL)
@@ -49,7 +51,9 @@ func TestGetWebhookIssuesStableSecret(t *testing.T) {
 	// Second call returns the SAME secret (so the user's Vikunja config stays valid).
 	rec2 := do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
 	var second webhookInfoResponse
-	json.Unmarshal(rec2.Body.Bytes(), &second)
+	if err := json.Unmarshal(rec2.Body.Bytes(), &second); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
 	if second.Secret != first.Secret {
 		t.Errorf("secret changed between calls: %q -> %q", first.Secret, second.Secret)
 	}
@@ -71,7 +75,9 @@ func TestInboundWebhookFullFlow(t *testing.T) {
 	// 1. user sets up push -> gets a secret
 	rec := do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
 	var setup webhookInfoResponse
-	json.Unmarshal(rec.Body.Bytes(), &setup)
+	if err := json.Unmarshal(rec.Body.Bytes(), &setup); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
 
 	// 2. Vikunja delivers a signed tasks.overdue
 	eventBody := `{"event_name":"tasks.overdue","time":"2026-08-29T09:00:00Z","data":{` +
@@ -103,7 +109,10 @@ func TestInboundWebhookFullFlow(t *testing.T) {
 	// 4. last_delivery_at is now set
 	rec = do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
 	var after webhookInfoResponse
-	json.Unmarshal(rec.Body.Bytes(), &after)
+	if err := json.Unmarshal(rec.Body.Bytes(), &after); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
 	if after.LastDeliveryAt == nil {
 		t.Error("last_delivery_at still null after a delivery")
 	}
@@ -131,7 +140,9 @@ func TestInboundWebhookUnsupportedEventIs200(t *testing.T) {
 	e := newTestEnv(t, nil)
 	rec := do(t, e.handler, "GET", "/companion/v1/webhook", e.userToken, "")
 	var setup webhookInfoResponse
-	json.Unmarshal(rec.Body.Bytes(), &setup)
+	if err := json.Unmarshal(rec.Body.Bytes(), &setup); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
 
 	body := `{"event_name":"task.created","time":"2026-08-29T09:00:00Z","data":{}}`
 	r := httptest.NewRequest("POST", "/companion/v1/webhooks/vikunja", strings.NewReader(body))
