@@ -74,7 +74,7 @@ func (a *Apprise) Send(ctx context.Context, _ int64, n Notification) error {
 	if err != nil {
 		return fmt.Errorf("apprise: POST %s: %w", a.apiURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode/100 != 2 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))

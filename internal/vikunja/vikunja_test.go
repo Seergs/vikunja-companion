@@ -15,7 +15,7 @@ func TestInfo(t *testing.T) {
 		if r.Header.Get("Authorization") != "" {
 			t.Errorf("info must not be authenticated, got %q", r.Header.Get("Authorization"))
 		}
-		w.Write([]byte(`{"version":"v0.24.6","extra":"ignored"}`))
+		_, _ = w.Write([]byte(`{"version":"v0.24.6","extra":"ignored"}`))
 	}))
 	defer srv.Close()
 
@@ -33,7 +33,7 @@ func TestUserSendsBearer(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer tok-123" {
 			t.Errorf("Authorization = %q", got)
 		}
-		w.Write([]byte(`{"id":42,"username":"ada"}`))
+		_, _ = w.Write([]byte(`{"id":42,"username":"ada"}`))
 	}))
 	defer srv.Close()
 
@@ -49,7 +49,7 @@ func TestUserSendsBearer(t *testing.T) {
 func TestUserUnauthorized(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"message":"invalid token"}`))
+		_, _ = w.Write([]byte(`{"message":"invalid token"}`))
 	}))
 	defer srv.Close()
 
@@ -65,7 +65,7 @@ func TestUserUnauthorized(t *testing.T) {
 func TestInfoServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte("nope"))
+		_, _ = w.Write([]byte("nope"))
 	}))
 	defer srv.Close()
 

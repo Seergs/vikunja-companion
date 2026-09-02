@@ -46,8 +46,12 @@ func TestPutDigestSettingsRoundTrip(t *testing.T) {
 	db := openTemp(t)
 	ctx := context.Background()
 
-	db.PutDigestSettings(ctx, 5, true, "06:30")
-	db.SetUserTimezone(ctx, 5, "UTC")
+	if err := db.PutDigestSettings(ctx, 5, true, "06:30"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetUserTimezone(ctx, 5, "UTC"); err != nil {
+		t.Fatal(err)
+	}
 
 	s, err := db.UserSettings(ctx, 5)
 	if err != nil {

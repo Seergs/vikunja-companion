@@ -63,7 +63,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	log.Info("database ready", "path", cfg.DBPath)
 
 	cipher, err := crypto.NewCipher(cfg.MasterKey)

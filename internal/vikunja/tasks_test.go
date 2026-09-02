@@ -14,7 +14,7 @@ func TestUserSettingsTimezone(t *testing.T) {
 		if r.URL.Path != "/api/v1/user" || r.Header.Get("Authorization") != "Bearer tok" {
 			t.Errorf("req = %s %q", r.URL.Path, r.Header.Get("Authorization"))
 		}
-		w.Write([]byte(`{"id":1,"username":"ada","settings":{"timezone":"America/Mexico_City","name":"Ada"}}`))
+		_, _ = w.Write([]byte(`{"id":1,"username":"ada","settings":{"timezone":"America/Mexico_City","name":"Ada"}}`))
 	}))
 	defer srv.Close()
 
@@ -44,9 +44,9 @@ func TestTasksDueTodayFilterAndPagination(t *testing.T) {
 		switch page {
 		case 1:
 			// a full page -> the client must ask for another
-			fmt.Fprint(w, "[", full(tasksPerPage), "]")
+			_, _ = fmt.Fprint(w, "[", full(tasksPerPage), "]")
 		case 2:
-			w.Write([]byte(`[{"id":501,"title":"last","priority":4,"due_date":"2026-08-29T12:00:00Z"}]`))
+			_, _ = w.Write([]byte(`[{"id":501,"title":"last","priority":4,"due_date":"2026-08-29T12:00:00Z"}]`))
 		default:
 			t.Fatalf("unexpected page %d", page)
 		}
